@@ -1,11 +1,33 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+
 import {
   addExpense, updateExpense, deleteExpense,
   addBill, updateBill, deleteBill,
 } from './actions';
+
+function SvgPie({ data, colors }: { data: { name: string; value: number }[]; colors: string[] }) {
+  const total = data.reduce((s, d) => s + d.value, 0);
+  if (total === 0) return null;
+  const R = 70; const r = 42; const cx = 90; const cy = 90;
+  let angle = -Math.PI / 2;
+  const slices = data.map((d, i) => {
+    const sweep = (d.value / total) * 2 * Math.PI;
+    const x1 = cx + R * Math.cos(angle); const y1 = cy + R * Math.sin(angle);
+    angle += sweep;
+    const x2 = cx + R * Math.cos(angle); const y2 = cy + R * Math.sin(angle);
+    const xi1 = cx + r * Math.cos(angle - sweep); const yi1 = cy + r * Math.sin(angle - sweep);
+    const xi2 = cx + r * Math.cos(angle); const yi2 = cy + r * Math.sin(angle);
+    const large = sweep > Math.PI ? 1 : 0;
+    return { path: `M${x1},${y1} A${R},${R} 0 ${large},1 ${x2},${y2} L${xi2},${yi2} A${r},${r} 0 ${large},0 ${xi1},${yi1} Z`, color: colors[i % colors.length] };
+  });
+  return (
+    <svg width="180" height="180" viewBox="0 0 180 180" className="shrink-0">
+      {slices.map((s, i) => <path key={i} d={s.path} fill={s.color} stroke="white" strokeWidth="2" />)}
+    </svg>
+  );
+}
 
 type Bill = { id: number; name: string; amount: number; due_day: number; category: string; daysLeft: number };
 type Expense = {
@@ -274,35 +296,15 @@ export default function BudzetClient({
       {catTotals.length > 0 && (
         <div className="bg-white rounded-xl border border-zinc-200 p-4 mb-5">
           <p className="text-sm font-semibold text-zinc-700 mb-3">Podział wydatków</p>
-          <div className="flex flex-col md:flex-row items-center gap-4">
-            <div className="w-full md:w-72 h-56">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={catTotals}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={85}
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {catTotals.map((_, i) => (
-                      <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(v: number) => `${v} zł`} />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="flex-1 flex flex-col gap-1.5">
+          <div className="flex flex-col md:flex-row items-center gap-6">
+            <SvgPie data={catTotals} colors={PIE_COLORS} />
+            <div className="flex-1 flex flex-col gap-1.5 w-full">
               {catTotals.map((d, i) => (
                 <div key={d.name} className="flex items-center gap-2 text-sm">
                   <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
                   <span className="flex-1 text-zinc-700 capitalize">{d.name}</span>
                   <span className="font-semibold text-zinc-800">{d.value} zł</span>
-                  <span className="text-xs text-zinc-400">
+                  <span className="text-xs text-zinc-400 w-8 text-right">
                     {totalOutcome > 0 ? `${Math.round(d.value / totalOutcome * 100)}%` : ''}
                   </span>
                 </div>
