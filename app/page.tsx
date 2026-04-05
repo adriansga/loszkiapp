@@ -1,4 +1,4 @@
-import { getDb } from '@/lib/db';
+import { supabase } from '@/lib/db';
 import Link from 'next/link';
 
 function getWeekNumber(date: Date) {
@@ -7,47 +7,56 @@ function getWeekNumber(date: Date) {
   return Math.ceil((diff / 86400000 + start.getDay() + 1) / 7);
 }
 
-export default function DashboardPage() {
-  const db = getDb();
+export default async function DashboardPage() {
   const today = new Date();
   const weekNum = getWeekNumber(today);
   const dayOfWeek = today.getDay() === 0 ? 7 : today.getDay();
 
-  const todayMeal = db.prepare(`
-    SELECT wp.*, m.protein_rating, m.prep_time, m.notes
-    FROM weekly_plan wp
-    LEFT JOIN meals m ON wp.meal_id = m.id
-    WHERE wp.week_number = ? AND wp.day_of_week = ?
-    LIMIT 1
-  `).get(weekNum, dayOfWeek) as { meal_name: string; protein_rating: string; prep_time: number; notes: string } | undefined;
+  // Pobierz dzisiejszy obiad z Supabase
+  const { data: todayMealData } = await supabase
+    .from('weekly_plan')
+    .select('*, meals(*)')
+    .eq('week_number', weekNum)
+    .eq('day_of_week', dayOfWeek)
+    .single();
 
-  const weekMeals = db.prepare(`
-    SELECT wp.*, m.protein_rating, m.prep_time
-    FROM weekly_plan wp
-    LEFT JOIN meals m ON wp.meal_id = m.id
-    WHERE wp.week_number = ?
-    ORDER BY wp.day_of_week
-  `).all(weekNum) as Array<{ day_of_week: number; meal_name: string; protein_rating: string; prep_time: number }>;
+  const todayMeal = todayMealData ? {
+    meal_name: todayMealData.meal_name || todayMealData.meals?.name,
+    protein_rating: todayMealData.meals?.protein_rating,
+    prep_time: todayMealData.meals?.prep_time,
+    notes: todayMealData.meals?.notes
+  } : null;
 
-  const bills = db.prepare(`
-    SELECT * FROM bills WHERE active = 1 ORDER BY due_day
-  `).all() as Array<{ name: string; amount: number; due_day: number; category: string }>;
+  // Pobierz plan tygodnia
+  const { data: weekMealsData } = await supabase
+    .from('weekly_plan')
+    .select('*, meals(name, protein_rating, prep_time)')
+    .eq('week_number', weekNum)
+    .order('day_of_week');
 
+  const weekMeals = weekMealsData || [];
+
+  // Pobierz rachunki
+  const { data: billsData } = await supabase
+    .from('bills')
+    .select('*')
+    .eq('active', true)
+    .order('due_day');
+
+  const bills = billsData || [];
   const todayDay = today.getDate();
   const upcomingBills = bills.filter(b => {
     const daysLeft = b.due_day - todayDay;
     return daysLeft >= 0 && daysLeft <= 7;
   });
 
-  const pantryExpiring = db.prepare(`
-    SELECT *,
-      CAST((julianday('now') - julianday(purchase_date)) AS INTEGER) as days_stored
-    FROM pantry
-    WHERE purchase_date IS NOT NULL AND expiry_days IS NOT NULL
-      AND (julianday('now') - julianday(purchase_date)) >= (expiry_days - 2)
-    ORDER BY days_stored DESC
-    LIMIT 5
-  `).all() as Array<{ name: string; days_stored: number; expiry_days: number }>;
+  // Pobierz wygasające produkty
+  const { data: pantryExpiring } = await supabase
+    .from('pantry')
+    .select('*')
+    .not('purchase_date', 'is', null)
+    .not('expiry_days', 'is', null)
+    .limit(5);
 
   const proteinColors: Record<string, string> = {
     hi: 'bg-emerald-100 text-emerald-800',
@@ -56,7 +65,6 @@ export default function DashboardPage() {
     lo: 'bg-red-100 text-red-700',
   };
   const proteinLabels: Record<string, string> = { hi: '💪💪💪', md: '💪💪', ok: '💪', lo: '⚠️' };
-
   const dayLabels = ['', 'Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob', 'Nd'];
 
   return (
@@ -100,7 +108,7 @@ export default function DashboardPage() {
         {/* Alerty */}
         <div className="bg-white rounded-xl p-5 border border-zinc-200 shadow-sm">
           <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2">Alerty</p>
-          {upcomingBills.length === 0 && pantryExpiring.length === 0 ? (
+          {upcomingBills.length === 0 && (pantryExpiring?.length || 0) === 0 ? (
             <p className="text-sm text-emerald-600">✓ Wszystko OK</p>
           ) : (
             <div className="flex flex-col gap-2">
@@ -111,11 +119,10 @@ export default function DashboardPage() {
                   <span className="text-zinc-400"> — {b.due_day}. dnia ({b.amount} zł)</span>
                 </div>
               ))}
-              {pantryExpiring.map((p, i) => (
+              {pantryExpiring?.map((p, i) => (
                 <div key={i} className="text-xs">
                   <span className="text-red-500">⚠️</span>{' '}
                   <span className="font-medium">{p.name}</span>
-                  <span className="text-zinc-400"> — {p.days_stored}d/{p.expiry_days}d</span>
                 </div>
               ))}
             </div>
@@ -145,8 +152,8 @@ export default function DashboardPage() {
                 </p>
                 {meal ? (
                   <>
-                    <p className="text-xs text-zinc-700 leading-tight line-clamp-2">{meal.meal_name}</p>
-                    <span className="text-xs mt-1 inline-block">{proteinLabels[meal.protein_rating]}</span>
+                    <p className="text-xs text-zinc-700 leading-tight line-clamp-2">{meal.meal_name || meal.meals?.name}</p>
+                    <span className="text-xs mt-1 inline-block">{proteinLabels[meal.meals?.protein_rating]}</span>
                   </>
                 ) : (
                   <p className="text-xs text-zinc-300">—</p>
