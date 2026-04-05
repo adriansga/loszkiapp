@@ -38,14 +38,6 @@ export const SWEETS_LIST = [
   { name: 'BIG HIT orzech/czek', quantity: '1 paczka', unit: 'szt', category: 'słodycze' },
 ];
 
-// Produkty "zawsze sprawdź" — kończą się regularnie
-const STAPLES = [
-  { name: 'Sól', unit: 'szt', category: 'suche' },
-  { name: 'Pieprz', unit: 'szt', category: 'suche' },
-  { name: 'Olej / oliwa', unit: 'szt', category: 'suche' },
-  { name: 'Cukier', unit: 'szt', category: 'suche' },
-  { name: 'Mąka', unit: 'szt', category: 'suche' },
-];
 
 function nameMatch(pantryName: string, shoppingName: string): boolean {
   const p = pantryName.toLowerCase().trim();
