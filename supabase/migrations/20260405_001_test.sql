@@ -1,5 +1,5 @@
--- Test migracji v3: dodanie kolumny version do tabeli meals (jeśli nie istnieje)
--- Ten plik weryfikuje czy pipeline GitHub Actions → Supabase działa
+-- Test migracji v4: weryfikacja pipeline psql → Supabase Transaction Pooler
+-- Dodaje kolumnę version do tabeli meals (idempotentne)
 DO $$
 BEGIN
   IF NOT EXISTS (
