@@ -7,7 +7,7 @@ const withPWA = require('next-pwa')({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Twoja konfiguracja
+  turbopack: {},
 };
 
 module.exports = withPWA(nextConfig);
