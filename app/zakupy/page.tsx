@@ -17,7 +17,7 @@ export default async function ZakupyPage({
   const params = await searchParams;
   const today = new Date();
   const currentWeek = getWeekNumber(today);
-  const selectedWeek = params.week ? parseInt(params.week) : currentWeek;
+  const selectedWeek = params.week ? parseInt(params.week) : currentWeek + 1;
 
   const { data: existingList } = await supabase
     .from('shopping_lists')
