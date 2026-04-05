@@ -1,13 +1,12 @@
 #!/usr/bin/env node
 // scripts/migrate.mjs
-// Uruchom: node scripts/migrate.mjs
-// Wymaga SUPABASE_DB_PASSWORD w .env.local lub środowisku
+// Uruchom lokalnie: node scripts/migrate.mjs
+// W GitHub Actions: SUPABASE_ACCESS_TOKEN w Secrets
 
-import { readFileSync, readdirSync, existsSync } from 'fs'
+import { readFileSync, readdirSync } from 'fs'
 import { join } from 'path'
-import { execSync } from 'child_process'
 
-// Wczytaj .env.local
+// Wczytaj .env.local (lokalnie)
 try {
   const env = readFileSync('.env.local', 'utf-8')
   for (const line of env.split('\n')) {
@@ -22,42 +21,49 @@ try {
 } catch {}
 
 const PROJECT_REF = 'qlqnrsxpmoeoukfgovmy'
-const DB_PASS = process.env.SUPABASE_DB_PASSWORD
-const DB_URL = `postgresql://postgres.${PROJECT_REF}:${DB_PASS}@aws-0-eu-north-1.pooler.supabase.com:6543/postgres`
+const TOKEN = process.env.SUPABASE_ACCESS_TOKEN
 
-if (!DB_PASS) {
-  console.error('❌ Brak SUPABASE_DB_PASSWORD w .env.local')
-  console.error('   Dodaj hasło do bazy (to samo co w GitHub Secrets SUPABASE_DB_PASSWORD)')
+if (!TOKEN) {
+  console.error('❌ Brak SUPABASE_ACCESS_TOKEN w .env.local lub środowisku')
   process.exit(1)
 }
 
-const migrationsDir = 'supabase/migrations'
-const files = readdirSync(migrationsDir)
+const files = readdirSync('supabase/migrations')
   .filter(f => f.endsWith('.sql'))
   .sort()
 
 if (!files.length) {
-  console.log('Brak plików .sql w', migrationsDir)
+  console.log('Brak plików SQL w supabase/migrations/')
   process.exit(0)
 }
 
 console.log(`Znaleziono ${files.length} plików migracji\n`)
 
 for (const file of files) {
-  const sqlPath = join(migrationsDir, file).replace(/\\/g, '/')
+  const sql = readFileSync(join('supabase/migrations', file), 'utf-8')
   process.stdout.write(`→ ${file} ... `)
 
-  try {
-    execSync(`psql "${DB_URL}" -f "${sqlPath}"`, {
-      env: { ...process.env, PGPASSWORD: DB_PASS },
-      stdio: ['ignore', 'pipe', 'pipe']
-    })
-    console.log('✓')
-  } catch (err) {
+  const res = await fetch(
+    `https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query: sql }),
+    }
+  )
+
+  const data = await res.json()
+
+  if (!res.ok) {
     console.log('❌')
-    console.error(err.stderr?.toString() || err.message)
+    console.error('Błąd:', JSON.stringify(data, null, 2))
     process.exit(1)
   }
+
+  console.log('✓')
 }
 
-console.log('\n✅ Wszystkie migracje wykonane.')
+console.log('\n✅ Migracje wykonane.')
