@@ -25,7 +25,7 @@ export default async function ZakupyPage({
     .maybeSingle();
 
   let listId: number | null = null;
-  let items: Array<{ id: number; name: string; quantity: string; unit: string; checked: boolean; category: string }> = [];
+  let items: Array<{ id: number; name: string; quantity: string; unit: string; checked: number; category: string }> = [];
 
   if (existingList) {
     listId = existingList.id;
