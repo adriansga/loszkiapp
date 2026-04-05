@@ -32,6 +32,7 @@ export default function ShoppingListClient({
   const [items, setItems] = useState(initialItems);
   const [newItem, setNewItem] = useState('');
   const [newQty, setNewQty] = useState('');
+  const [genError, setGenError] = useState('');
   const [isPending, startTransition] = useTransition();
 
   const checked = items.filter(i => i.checked).length;
@@ -47,11 +48,18 @@ export default function ShoppingListClient({
   if (uncategorized.length > 0) grouped['inne'] = [...(grouped['inne'] || []), ...uncategorized];
 
   function handleGenerate() {
+    setGenError('');
     startTransition(async () => {
-      const result = await generateShoppingList(selectedWeek);
-      if (result.listId) {
-        setListId(result.listId);
-        setItems(result.items);
+      try {
+        const result = await generateShoppingList(selectedWeek);
+        if (result.error) {
+          setGenError(result.error);
+        } else if (result.listId) {
+          setListId(result.listId);
+          setItems(result.items);
+        }
+      } catch (e) {
+        setGenError(e instanceof Error ? e.message : 'Nieznany błąd');
       }
     });
   }
@@ -141,6 +149,11 @@ export default function ShoppingListClient({
           >
             {isPending ? 'Generuję…' : '✨ Generuj listę zakupów'}
           </button>
+          {genError && (
+            <p className="text-xs text-red-500 mt-2 bg-red-50 px-3 py-2 rounded-lg">
+              Błąd: {genError}
+            </p>
+          )}
           <p className="text-xs text-zinc-400 mt-3">
             Lista uwzględni stany spiżarni (co już masz)
           </p>

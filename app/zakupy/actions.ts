@@ -55,6 +55,7 @@ function nameMatch(pantryName: string, shoppingName: string): boolean {
 }
 
 export async function generateShoppingList(weekNumber: number) {
+  try {
   // Zwróć istniejącą listę jeśli jest
   const { data: existing } = await supabase
     .from('shopping_lists')
@@ -69,7 +70,7 @@ export async function generateShoppingList(weekNumber: number) {
       .select('*')
       .eq('list_id', existing.id)
       .order('category');
-    return { listId: existing.id, items: items || [] };
+    return { listId: existing.id, items: items || [], error: null };
   }
 
   // Pobierz spiżarnię z ilościami
@@ -81,7 +82,7 @@ export async function generateShoppingList(weekNumber: number) {
   // Utwórz nową listę
   const { data: list, error: listError } = await supabase
     .from('shopping_lists')
-    .insert({ week_number: weekNumber, created_at: new Date().toISOString(), status: 'active' })
+    .insert({ week_number: weekNumber, status: 'active' })
     .select('id')
     .maybeSingle();
 
@@ -97,7 +98,7 @@ export async function generateShoppingList(weekNumber: number) {
       const inPantry = pantryItems.find(p => nameMatch(p.name, item.name));
       return !inPantry || inPantry.quantity <= 0;
     })
-    .map(item => ({ ...item, list_id: listId, checked: false }));
+    .map(item => ({ name: item.name, quantity: item.quantity, unit: item.unit, category: item.category, list_id: listId, checked: false }));
 
   // Dodaj STAPLES których brakuje lub mają qty <= 0
   const staplesNeeded = STAPLES
@@ -105,12 +106,16 @@ export async function generateShoppingList(weekNumber: number) {
       const inPantry = pantryItems.find(p => nameMatch(p.name, s.name));
       return !inPantry || inPantry.quantity <= 0;
     })
-    .map(s => ({ ...s, quantity: '—', list_id: listId, checked: false }));
+    .map(s => ({ name: s.name, quantity: '-', unit: s.unit, category: s.category, list_id: listId, checked: false }));
 
   const toInsert = [...mainItems, ...staplesNeeded];
 
   if (toInsert.length > 0) {
-    await supabase.from('shopping_items').insert(toInsert);
+    const { error: insertError } = await supabase.from('shopping_items').insert(toInsert);
+    if (insertError) {
+      await supabase.from('shopping_lists').delete().eq('id', listId);
+      return { listId: null, items: [], error: insertError.message };
+    }
   }
 
   const { data: items } = await supabase
@@ -120,7 +125,11 @@ export async function generateShoppingList(weekNumber: number) {
     .order('category');
 
   revalidatePath('/zakupy');
-  return { listId, items: items || [] };
+  return { listId, items: items || [], error: null };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { listId: null, items: [], error: msg };
+  }
 }
 
 export async function toggleItem(itemId: number) {
