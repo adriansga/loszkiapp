@@ -9,3 +9,4 @@ BEGIN
     ALTER TABLE meals ADD COLUMN version INTEGER DEFAULT 1;
   END IF;
 END $$;
+-- trigger v5
