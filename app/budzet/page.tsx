@@ -1,6 +1,8 @@
 import { supabase } from '@/lib/db';
 import BudzetClient from './BudzetClient';
 
+export const dynamic = 'force-dynamic';
+
 export default async function BudzetPage() {
   const today = new Date();
   const todayDay = today.getDate();

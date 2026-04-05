@@ -1,6 +1,8 @@
 import { supabase } from '@/lib/db';
 import Link from 'next/link';
 
+export const dynamic = 'force-dynamic';
+
 function getWeekNumber(date: Date) {
   const start = new Date(date.getFullYear(), 0, 1);
   const diff = date.getTime() - start.getTime();
