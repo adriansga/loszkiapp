@@ -2,48 +2,80 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import Image from 'next/image';
 
 const nav = [
-  { href: '/', label: 'Dashboard', icon: '🏠' },
+  { href: '/', label: 'Dom', icon: '🏠' },
   { href: '/obiady', label: 'Obiady', icon: '🍽️' },
   { href: '/zakupy', label: 'Zakupy', icon: '🛒' },
   { href: '/spizarnia', label: 'Spiżarnia', icon: '📦' },
   { href: '/budzet', label: 'Budżet', icon: '💰' },
-  { href: '/agent', label: 'Agent AI', icon: '🤖' },
+  { href: '/agent', label: 'Agent', icon: '🤖' },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-56 min-h-screen bg-zinc-900 text-white flex flex-col">
-      <div className="px-5 py-6 border-b border-zinc-700">
-        <h1 className="text-lg font-bold tracking-tight">🏠 Loszki</h1>
-        <p className="text-xs text-zinc-400 mt-0.5">Panel domowy</p>
-      </div>
-      <nav className="flex-1 px-3 py-4 flex flex-col gap-1">
+    <>
+      {/* ── Desktop sidebar ── */}
+      <aside className="hidden md:flex w-56 min-h-screen bg-zinc-900 text-white flex-col shrink-0">
+        <div className="px-5 py-5 border-b border-zinc-700 flex items-center gap-3">
+          <Image src="/boar.svg" alt="Loszki" width={36} height={36} className="rounded-lg" />
+          <div>
+            <h1 className="text-base font-bold tracking-tight text-white">Loszki</h1>
+            <p className="text-xs text-zinc-400">Panel domowy</p>
+          </div>
+        </div>
+        <nav className="flex-1 px-3 py-4 flex flex-col gap-1">
+          {nav.map(({ href, label, icon }) => {
+            const active = pathname === href;
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  active
+                    ? 'bg-emerald-600 text-white'
+                    : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'
+                }`}
+              >
+                <span className="text-base">{icon}</span>
+                {label}
+              </Link>
+            );
+          })}
+        </nav>
+        <div className="px-5 py-4 border-t border-zinc-700">
+          <p className="text-xs text-zinc-500">Adrian & Kasia</p>
+          <p className="text-xs text-zinc-600 mt-0.5">v0.1</p>
+        </div>
+      </aside>
+
+      {/* ── Mobile top bar ── */}
+      <header className="md:hidden fixed top-0 left-0 right-0 z-50 bg-zinc-900 border-b border-zinc-700 h-14 flex items-center px-4 gap-3">
+        <Image src="/boar.svg" alt="Loszki" width={32} height={32} className="rounded-lg" />
+        <span className="text-white font-bold text-base tracking-tight">Loszki</span>
+      </header>
+
+      {/* ── Mobile bottom nav ── */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-zinc-900 border-t border-zinc-700 flex safe-area-inset-bottom">
         {nav.map(({ href, label, icon }) => {
           const active = pathname === href;
           return (
             <Link
               key={href}
               href={href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                active
-                  ? 'bg-emerald-600 text-white'
-                  : 'text-zinc-300 hover:bg-zinc-800 hover:text-white'
+              className={`flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors ${
+                active ? 'text-emerald-400' : 'text-zinc-400 active:text-zinc-200'
               }`}
             >
-              <span className="text-base">{icon}</span>
-              {label}
+              <span className="text-xl leading-none">{icon}</span>
+              <span className="text-[9px] font-medium">{label}</span>
             </Link>
           );
         })}
       </nav>
-      <div className="px-5 py-4 border-t border-zinc-700">
-        <p className="text-xs text-zinc-500">Adrian & Kasia</p>
-        <p className="text-xs text-zinc-600">v0.1 · Faza 1</p>
-      </div>
-    </aside>
+    </>
   );
 }
