@@ -1,4 +1,4 @@
-import { getDb } from '@/lib/db';
+import { supabase } from '@/lib/db';
 import Link from 'next/link';
 
 function getWeekNumber(date: Date) {
@@ -16,46 +16,30 @@ const proteinColors: Record<string, string> = {
 const proteinLabels: Record<string, string> = { hi: '💪💪💪 >90g', md: '💪💪 60–90g', ok: '💪 30–60g', lo: '⚠️ <30g' };
 const dayLabels = ['', 'Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota', 'Niedziela'];
 
-export default function ObiadyPage({
+export default async function ObiadyPage({
   searchParams,
 }: {
   searchParams: Promise<{ week?: string; view?: string }>;
 }) {
-  return <ObiadyContent searchParamsPromise={searchParams} />;
-}
-
-async function ObiadyContent({
-  searchParamsPromise,
-}: {
-  searchParamsPromise: Promise<{ week?: string; view?: string }>;
-}) {
-  const searchParams = await searchParamsPromise;
-  const db = getDb();
+  const params = await searchParams;
   const today = new Date();
   const currentWeek = getWeekNumber(today);
-  const selectedWeek = searchParams.week ? parseInt(searchParams.week) : currentWeek;
-  const view = searchParams.view || 'week';
+  const selectedWeek = params.week ? parseInt(params.week) : currentWeek;
+  const view = params.view || 'week';
 
-  const weekMeals = db.prepare(`
-    SELECT wp.*, m.protein_rating, m.prep_time, m.notes, m.category
-    FROM weekly_plan wp
-    LEFT JOIN meals m ON wp.meal_id = m.id
-    WHERE wp.week_number = ?
-    ORDER BY wp.day_of_week
-  `).all(selectedWeek) as Array<{
-    day_of_week: number;
-    meal_name: string;
-    protein_rating: string;
-    prep_time: number;
-    notes: string;
-    category: string;
-    ingredient_chain: string;
-    cost_estimate: number;
-  }>;
+  const { data: weekPlan } = await supabase
+    .from('weekly_plan')
+    .select('*')
+    .eq('week_number', selectedWeek)
+    .order('day_of_week');
 
-  const allMeals = db.prepare(`
-    SELECT * FROM meals ORDER BY category, name
-  `).all() as Array<{
+  const { data: allMeals } = await supabase
+    .from('meals')
+    .select('*')
+    .order('category')
+    .order('name');
+
+  const mealsData = (allMeals || []) as Array<{
     id: number;
     name: string;
     category: string;
@@ -65,11 +49,24 @@ async function ObiadyContent({
     notes: string;
   }>;
 
-  const categoryGroups = allMeals.reduce((acc, m) => {
+  const mealsMap = mealsData.reduce((acc, m) => { acc[m.id] = m; return acc; }, {} as Record<number, typeof mealsData[0]>);
+
+  const weekMeals = (weekPlan || []).map(wp => ({
+    day_of_week: wp.day_of_week as number,
+    meal_name: wp.meal_name as string,
+    protein_rating: mealsMap[wp.meal_id]?.protein_rating || '',
+    prep_time: mealsMap[wp.meal_id]?.prep_time || null,
+    notes: mealsMap[wp.meal_id]?.notes || '',
+    category: mealsMap[wp.meal_id]?.category || '',
+    ingredient_chain: wp.ingredient_chain as string || '',
+    cost_estimate: wp.cost_estimate as number || 0,
+  }));
+
+  const categoryGroups = mealsData.reduce((acc, m) => {
     if (!acc[m.category]) acc[m.category] = [];
     acc[m.category].push(m);
     return acc;
-  }, {} as Record<string, typeof allMeals>);
+  }, {} as Record<string, typeof mealsData>);
 
   const categoryLabels: Record<string, string> = {
     kurczak: '🍗 Kurczak',

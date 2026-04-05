@@ -1,4 +1,4 @@
-import { getDb } from '@/lib/db';
+import { supabase } from '@/lib/db';
 import ShoppingListClient from './ShoppingListClient';
 
 function getWeekNumber(date: Date) {
@@ -13,35 +13,28 @@ export default async function ZakupyPage({
   searchParams: Promise<{ week?: string }>;
 }) {
   const params = await searchParams;
-  const db = getDb();
   const today = new Date();
   const currentWeek = getWeekNumber(today);
   const selectedWeek = params.week ? parseInt(params.week) : currentWeek;
 
-  const existingList = db.prepare(`
-    SELECT sl.*,
-      json_group_array(json_object(
-        'id', si.id, 'name', si.name, 'quantity', si.quantity,
-        'unit', si.unit, 'checked', si.checked, 'category', si.category
-      )) as items_json
-    FROM shopping_lists sl
-    LEFT JOIN shopping_items si ON si.list_id = sl.id
-    WHERE sl.week_number = ? AND sl.status = 'active'
-    GROUP BY sl.id
-    LIMIT 1
-  `).get(selectedWeek) as { id: number; week_number: number; created_at: string; items_json: string } | undefined;
+  const { data: existingList } = await supabase
+    .from('shopping_lists')
+    .select('id')
+    .eq('week_number', selectedWeek)
+    .eq('status', 'active')
+    .maybeSingle();
 
   let listId: number | null = null;
-  let items: Array<{ id: number; name: string; quantity: string; unit: string; checked: number; category: string }> = [];
+  let items: Array<{ id: number; name: string; quantity: string; unit: string; checked: boolean; category: string }> = [];
 
   if (existingList) {
     listId = existingList.id;
-    try {
-      const parsed = JSON.parse(existingList.items_json);
-      items = parsed.filter((i: { id: number | null }) => i.id !== null);
-    } catch {
-      items = [];
-    }
+    const { data: listItems } = await supabase
+      .from('shopping_items')
+      .select('*')
+      .eq('list_id', listId)
+      .order('category');
+    items = listItems || [];
   }
 
   return (

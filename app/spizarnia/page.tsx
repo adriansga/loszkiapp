@@ -1,18 +1,12 @@
-import { getDb } from '@/lib/db';
+import { supabase } from '@/lib/db';
 import PantryClient from './PantryClient';
 
-export default function SpizarniaPage() {
-  const db = getDb();
-  const items = db.prepare('SELECT * FROM pantry ORDER BY category, name').all() as Array<{
-    id: number;
-    name: string;
-    quantity: number;
-    unit: string;
-    category: string;
-    purchase_date: string;
-    expiry_days: number;
-    notes: string;
-  }>;
+export default async function SpizarniaPage() {
+  const { data: items } = await supabase
+    .from('pantry')
+    .select('*')
+    .order('category')
+    .order('name');
 
-  return <PantryClient initialItems={items} />;
+  return <PantryClient initialItems={items || []} />;
 }
