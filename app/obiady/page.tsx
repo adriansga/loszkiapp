@@ -58,17 +58,26 @@ export default async function ObiadyPage({
   };
 
   const mealsData = (allMeals || []) as MealRow[];
-  const mealsMap = mealsData.reduce((acc, m) => { acc[m.id] = m; return acc; }, {} as Record<number, MealRow>);
+  // Lookup po nazwie — meal_id w weekly_plan jest null dla starych wpisów
+  // Preferuj wpisy z przepisem jeśli jest kilka o tej samej nazwie
+  const mealsByName = mealsData.reduce((acc, m) => {
+    if (!acc[m.name] || m.recipe) acc[m.name] = m;
+    return acc;
+  }, {} as Record<string, MealRow>);
 
-  const weekMeals = (weekPlan || []).map(wp => ({
-    day_of_week: wp.day_of_week as number,
-    meal_name: wp.meal_name as string,
-    protein_rating: mealsMap[wp.meal_id]?.protein_rating || '',
-    prep_time: mealsMap[wp.meal_id]?.prep_time || null,
-    notes: mealsMap[wp.meal_id]?.notes || '',
-    recipe: mealsMap[wp.meal_id]?.recipe || '',
-    ingredients: mealsMap[wp.meal_id]?.ingredients || '',
-  }));
+  const weekMeals = (weekPlan || []).map(wp => {
+    const name = wp.meal_name as string;
+    const m = mealsByName[name];
+    return {
+      day_of_week: wp.day_of_week as number,
+      meal_name: name,
+      protein_rating: m?.protein_rating || '',
+      prep_time: m?.prep_time || null,
+      notes: m?.notes || '',
+      recipe: m?.recipe || '',
+      ingredients: m?.ingredients || '',
+    };
+  });
 
   const categoryGroups = mealsData.reduce((acc, m) => {
     if (!acc[m.category]) acc[m.category] = [];
