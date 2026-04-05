@@ -68,13 +68,11 @@ export default function BudzetClient({
   bills: initialBills,
   expenses: initialExpenses,
   totalBills,
-  totalExpenses: _totalExpenses,
   currentMonth,
 }: {
   bills: Bill[];
   expenses: Expense[];
   totalBills: number;
-  totalExpenses: number;
   currentMonth: string;
 }) {
   const [bills, setBills] = useState(initialBills);
