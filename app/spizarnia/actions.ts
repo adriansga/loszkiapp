@@ -43,7 +43,32 @@ export async function addPantryItem(form: PantryForm) {
 }
 
 export async function deletePantryItem(id: number) {
+  // Pobierz nazwę produktu przed usunięciem
+  const { data: pantryItem } = await supabase
+    .from('pantry')
+    .select('name')
+    .eq('id', id)
+    .single();
+
   await supabase.from('pantry').delete().eq('id', id);
+
+  // Odznacz produkt na aktywnej liście zakupów (żeby wiadomo było, że trzeba kupić ponownie)
+  if (pantryItem) {
+    const { data: activeLists } = await supabase
+      .from('shopping_lists')
+      .select('id')
+      .eq('status', 'active');
+
+    if (activeLists && activeLists.length > 0) {
+      const listIds = activeLists.map(l => l.id);
+      await supabase
+        .from('shopping_items')
+        .update({ checked: false })
+        .in('list_id', listIds)
+        .ilike('name', `%${pantryItem.name}%`);
+    }
+  }
+
   revalidatePath('/spizarnia');
 }
 

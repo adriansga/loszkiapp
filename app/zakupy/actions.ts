@@ -245,23 +245,25 @@ export async function toggleItem(itemId: number) {
   const newChecked = !item.checked;
   await supabase.from('shopping_items').update({ checked: newChecked }).eq('id', itemId);
 
-  // Zaznaczenie = kupione → dodaj do spiżarni
+  // Zaznaczenie = kupione → dodaj do spiżarni z poprawną ilością
   if (newChecked) {
-    const parsed = parseIngredient(item.name);
-    const qty = parsed.qty || 1;
+    // Parsuj ilość z pola quantity (np. "400 g", "4 szt", "750 ml")
+    const qtyMatch = (item.quantity || '').match(/^(\d+[.,]?\d*)\s*(\w*)/);
+    const qty = qtyMatch ? parseFloat(qtyMatch[1].replace(',', '.')) : 1;
+    const unit = qtyMatch && qtyMatch[2] ? qtyMatch[2].toLowerCase() : 'szt';
     const { data: existing } = await supabase
       .from('pantry')
       .select('id, quantity')
-      .ilike('name', `%${ingredientKey(parsed.name)}%`)
+      .ilike('name', `%${ingredientKey(item.name)}%`)
       .maybeSingle();
 
     if (existing) {
       await supabase.from('pantry').update({ quantity: existing.quantity + qty }).eq('id', existing.id);
     } else {
       await supabase.from('pantry').insert({
-        name: parsed.name || item.name,
+        name: item.name,
         quantity: qty,
-        unit: parsed.unit || 'szt',
+        unit: unit,
         category: detectShoppingCategory(item.name),
         purchase_date: new Date().toISOString().slice(0, 10),
       });
