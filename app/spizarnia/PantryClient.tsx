@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useRef, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { addPantryItem, deletePantryItem } from './actions';
+import { addPantryItem, deletePantryItem, updatePantryItem } from './actions';
 
 const BarcodeScanner = dynamic(() => import('@/components/BarcodeScanner'), { ssr: false });
 
@@ -16,7 +16,10 @@ const EXPIRY_DEFAULTS: Record<string, number> = {
 };
 
 const categoryLabels: Record<string, string> = {
+  zamrażarka: '🧊 Zamrażarka',
   mięso: '🥩 Mięso',
+  przyprawy: '🧂 Przyprawy',
+  gotowe: '🍳 Dania gotowe',
   nabiał: '🥛 Nabiał',
   warzywa: '🥦 Warzywa',
   suche: '🌾 Suche / Zapas',
@@ -33,6 +36,19 @@ function getDaysLeft(item: Item): number | null {
   return Math.ceil((expiry.getTime() - today.getTime()) / 86400000);
 }
 
+function Highlight({ text, query }: { text: string; query: string }) {
+  if (!query) return <>{text}</>;
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx === -1) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="bg-yellow-200 text-yellow-900 rounded px-0.5">{text.slice(idx, idx + query.length)}</mark>
+      {text.slice(idx + query.length)}
+    </>
+  );
+}
+
 function ExpiryBadge({ item }: { item: Item }) {
   const daysLeft = getDaysLeft(item);
   if (daysLeft === null) return null;
@@ -45,17 +61,31 @@ function ExpiryBadge({ item }: { item: Item }) {
 
 export default function PantryClient({ initialItems }: { initialItems: Item[] }) {
   const [items, setItems] = useState(initialItems);
+  const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const firstMatchRef = useRef<HTMLDivElement>(null);
   const [showScanner, setShowScanner] = useState(false);
   const [form, setForm] = useState({ name: '', quantity: '', unit: 'szt', category: 'inne', purchase_date: '', expiry_days: '' });
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', quantity: '', unit: 'szt', category: 'inne', expiry_days: '' });
   const [isPending, startTransition] = useTransition();
 
-  const grouped = items.reduce((acc, item) => {
+  const filtered = search.trim()
+    ? items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()))
+    : items;
+
+  const grouped = filtered.reduce((acc, item) => {
     const cat = item.category || 'inne';
     if (!acc[cat]) acc[cat] = [];
     acc[cat].push(item);
     return acc;
   }, {} as Record<string, Item[]>);
+
+  useEffect(() => {
+    if (search.trim() && firstMatchRef.current) {
+      firstMatchRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [search]);
 
   const expiring = items.filter(i => {
     const d = getDaysLeft(i);
@@ -71,6 +101,29 @@ export default function PantryClient({ initialItems }: { initialItems: Item[] })
         setItems(prev => [...prev, result.item as Item]);
         setForm({ name: '', quantity: '', unit: 'szt', category: 'inne', purchase_date: '', expiry_days: '' });
         setShowForm(false);
+      }
+    });
+  }
+
+  function handleEditOpen(item: Item) {
+    setEditId(item.id);
+    setEditForm({
+      name: item.name,
+      quantity: String(item.quantity),
+      unit: item.unit,
+      category: item.category,
+      expiry_days: item.expiry_days ? String(item.expiry_days) : '',
+    });
+  }
+
+  function handleEditSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editId) return;
+    startTransition(async () => {
+      const result = await updatePantryItem(editId, editForm);
+      if (result.item) {
+        setItems(prev => prev.map(i => i.id === editId ? result.item as Item : i));
+        setEditId(null);
       }
     });
   }
@@ -133,6 +186,25 @@ export default function PantryClient({ initialItems }: { initialItems: Item[] })
             + Dodaj
           </button>
         </div>
+      </div>
+
+      <div className="relative mb-5">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">🔍</span>
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Szukaj w spiżarni... (np. papryka)"
+          className="w-full pl-9 pr-9 py-2.5 text-sm border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-400 bg-white text-zinc-800"
+        />
+        {search && (
+          <button
+            onClick={() => setSearch('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 text-lg leading-none"
+          >
+            ×
+          </button>
+        )}
       </div>
 
       {/* Alerty */}
@@ -227,6 +299,12 @@ export default function PantryClient({ initialItems }: { initialItems: Item[] })
       )}
 
       {/* Lista */}
+      {search.trim() && filtered.length === 0 && (
+        <div className="bg-white rounded-xl p-6 border border-zinc-200 text-center mb-4">
+          <p className="text-zinc-400 text-sm">Brak wyników dla <strong className="text-zinc-600">&ldquo;{search}&rdquo;</strong></p>
+        </div>
+      )}
+
       {items.length === 0 ? (
         <div className="bg-white rounded-xl p-8 border border-zinc-200 text-center">
           <p className="text-4xl mb-3">📦</p>
@@ -242,23 +320,91 @@ export default function PantryClient({ initialItems }: { initialItems: Item[] })
               </div>
               <div className="divide-y divide-zinc-100">
                 {catItems.map(item => (
-                  <div key={item.id} className="flex items-center gap-3 px-4 py-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-zinc-800">{item.name}</span>
-                        <ExpiryBadge item={item} />
+                  <div key={item.id} ref={search.trim() && item.id === filtered[0]?.id ? firstMatchRef : undefined}>
+                    {editId === item.id ? (
+                      <form onSubmit={handleEditSave} className="px-4 py-3 bg-zinc-50">
+                        <div className="grid grid-cols-2 gap-2 mb-2">
+                          <input
+                            value={editForm.name}
+                            onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))}
+                            placeholder="Nazwa"
+                            className="col-span-2 px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
+                            required
+                          />
+                          <div className="flex gap-1">
+                            <input
+                              value={editForm.quantity}
+                              onChange={e => setEditForm(p => ({ ...p, quantity: e.target.value }))}
+                              placeholder="Ilość"
+                              type="number"
+                              step="any"
+                              className="w-full px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
+                            />
+                            <select
+                              value={editForm.unit}
+                              onChange={e => setEditForm(p => ({ ...p, unit: e.target.value }))}
+                              className="px-2 py-1.5 text-sm border border-zinc-200 rounded-lg bg-white"
+                            >
+                              {['szt', 'g', 'kg', 'ml', 'l', 'op'].map(u => <option key={u}>{u}</option>)}
+                            </select>
+                          </div>
+                          <select
+                            value={editForm.category}
+                            onChange={e => setEditForm(p => ({ ...p, category: e.target.value }))}
+                            className="px-2 py-1.5 text-sm border border-zinc-200 rounded-lg bg-white"
+                          >
+                            {Object.entries(categoryLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                          </select>
+                          <input
+                            value={editForm.expiry_days}
+                            onChange={e => setEditForm(p => ({ ...p, expiry_days: e.target.value }))}
+                            placeholder="Wytrzyma (dni)"
+                            type="number"
+                            className="col-span-2 px-3 py-1.5 text-sm border border-zinc-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-white"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="submit"
+                            disabled={isPending}
+                            className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
+                          >
+                            Zapisz
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditId(null)}
+                            className="px-3 py-1.5 border border-zinc-200 rounded-lg text-sm text-zinc-600 hover:bg-zinc-100"
+                          >
+                            Anuluj
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setEditId(null); handleDelete(item.id); }}
+                            className="ml-auto px-3 py-1.5 text-sm text-red-500 hover:text-red-700"
+                          >
+                            Usuń
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div
+                        className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-zinc-50 transition-colors"
+                        onClick={() => handleEditOpen(item)}
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-zinc-800"><Highlight text={item.name} query={search} /></span>
+                            <ExpiryBadge item={item} />
+                          </div>
+                          {item.notes && <p className="text-xs text-zinc-400 mt-0.5">{item.notes}</p>}
+                        </div>
+                        <span className="text-sm text-zinc-500 shrink-0">
+                          {item.quantity} {item.unit}
+                        </span>
+                        <span className="text-zinc-300 text-xs ml-1">✏️</span>
                       </div>
-                      {item.notes && <p className="text-xs text-zinc-400 mt-0.5">{item.notes}</p>}
-                    </div>
-                    <span className="text-sm text-zinc-500 shrink-0">
-                      {item.quantity} {item.unit}
-                    </span>
-                    <button
-                      onClick={() => handleDelete(item.id)}
-                      className="text-zinc-300 hover:text-red-500 transition-colors text-sm ml-2"
-                    >
-                      ✕
-                    </button>
+                    )}
                   </div>
                 ))}
               </div>

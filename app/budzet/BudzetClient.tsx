@@ -35,7 +35,6 @@ type Expense = {
   description: string; type: string; notes: string | null;
 };
 
-const FOOD_BUDGET = 220;
 const EXPENSE_CATEGORIES = ['jedzenie', 'transport', 'rozrywka', 'zdrowie', 'rachunki', 'inne'];
 const BILL_CATEGORIES = ['czynsz', 'media', 'internet', 'telefon', 'inne'];
 const PIE_COLORS = ['#10b981', '#f43f5e', '#3b82f6', '#f59e0b', '#8b5cf6', '#6b7280'];
@@ -95,16 +94,15 @@ export default function BudzetClient({
 
   const filteredExpenses = expenses.filter(e => e.date.startsWith(filterMonth));
 
-  const foodExpenses = filteredExpenses
-    .filter(e => e.category === 'jedzenie' && (e.type === 'wydatek' || !e.type))
-    .reduce((sum, e) => sum + e.amount, 0);
-
   const totalIncome = filteredExpenses
     .filter(e => e.type === 'przychód')
     .reduce((sum, e) => sum + e.amount, 0);
   const totalOutcome = filteredExpenses
     .filter(e => e.type === 'wydatek' || !e.type)
     .reduce((sum, e) => sum + e.amount, 0);
+
+  // Ile zostaje po opłaceniu rachunków stałych
+  const disponible = totalIncome - totalBills;
 
   // Pie chart data — wydatki per kategoria
   const catTotals = EXPENSE_CATEGORIES.map(cat => ({
@@ -119,6 +117,12 @@ export default function BudzetClient({
   function openAddExp() {
     setEditExp(null);
     setExpForm(emptyExpenseForm(filterMonth));
+    setShowExpForm(true);
+  }
+
+  function openAddIncome() {
+    setEditExp(null);
+    setExpForm({ ...emptyExpenseForm(filterMonth), type: 'przychód' });
     setShowExpForm(true);
   }
 
@@ -234,31 +238,70 @@ export default function BudzetClient({
         </div>
       </div>
 
-      {/* Karty podsumowania */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <div className="bg-white rounded-xl p-4 border border-zinc-200">
-          <p className="text-xs text-zinc-400 uppercase tracking-wide mb-1">Rachunki</p>
-          <p className="text-xl font-bold text-zinc-800">{totalBills} zł</p>
-          <p className="text-xs text-zinc-400 mt-1">miesięcznie</p>
-        </div>
-        <div className={`bg-white rounded-xl p-4 border ${foodExpenses > FOOD_BUDGET ? 'border-red-300 bg-red-50' : 'border-zinc-200'}`}>
-          <p className="text-xs text-zinc-400 uppercase tracking-wide mb-1">Jedzenie</p>
-          <p className={`text-xl font-bold ${foodExpenses > FOOD_BUDGET ? 'text-red-600' : 'text-zinc-800'}`}>{foodExpenses} zł</p>
-          <p className="text-xs text-zinc-400 mt-1">budżet: {FOOD_BUDGET} zł</p>
-        </div>
-        <div className="bg-white rounded-xl p-4 border border-zinc-200">
-          <p className="text-xs text-zinc-400 uppercase tracking-wide mb-1">Wydatki</p>
-          <p className="text-xl font-bold text-red-600">{totalOutcome} zł</p>
-          <p className="text-xs text-zinc-400 mt-1">w tym miesiącu</p>
-        </div>
-        <div className="bg-white rounded-xl p-4 border border-zinc-200">
-          <p className="text-xs text-zinc-400 uppercase tracking-wide mb-1">Przychody</p>
-          <p className="text-xl font-bold text-emerald-600">{totalIncome} zł</p>
-          <p className={`text-xs mt-1 font-medium ${totalIncome - totalOutcome >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-            saldo: {totalIncome - totalOutcome >= 0 ? '+' : ''}{totalIncome - totalOutcome} zł
-          </p>
-        </div>
+      {/* Wiersz: Przychody + Koszty stałe */}
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <button
+          onClick={openAddIncome}
+          className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-left hover:bg-emerald-100 active:bg-emerald-200 transition-colors"
+        >
+          <p className="text-xs text-emerald-600 uppercase tracking-wide font-medium mb-1">Przychody</p>
+          <p className="text-2xl font-bold text-emerald-700">{totalIncome} zł</p>
+          <p className="text-xs text-emerald-500 mt-1">+ dodaj przychód</p>
+        </button>
+        <button
+          onClick={openAddBill}
+          className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-left hover:bg-orange-100 active:bg-orange-200 transition-colors"
+        >
+          <p className="text-xs text-orange-600 uppercase tracking-wide font-medium mb-1">Koszty stałe</p>
+          <p className="text-2xl font-bold text-orange-700">{totalBills} zł</p>
+          <p className="text-xs text-orange-500 mt-1">miesięcznie · + dodaj</p>
+        </button>
       </div>
+
+      {/* Główny kafelek: Zostało */}
+      {(() => {
+        const budget = disponible; // Przychody - Koszty stałe
+        const spent = totalOutcome;
+        const left = budget - spent;
+        const pct = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 0;
+        const danger = left < 0;
+        const warning = !danger && pct >= 70;
+        return (
+          <button
+            onClick={openAddExp}
+            className="w-full text-left bg-white border border-zinc-200 rounded-xl p-5 mb-6 hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
+          >
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <p className="text-xs text-zinc-400 uppercase tracking-wide font-medium mb-1">Zostało w tym miesiącu</p>
+                <p className={`text-3xl font-bold ${danger ? 'text-red-600' : warning ? 'text-orange-600' : 'text-zinc-800'}`}>
+                  {left} zł
+                </p>
+                <p className="text-xs text-zinc-400 mt-1">
+                  budżet {budget} zł · wydano {spent} zł
+                </p>
+              </div>
+              <span className="text-xs text-emerald-600 font-medium bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg shrink-0 mt-1">
+                + dodaj wydatek
+              </span>
+            </div>
+            {/* Pasek postępu */}
+            {budget > 0 && (
+              <div className="w-full bg-zinc-100 rounded-full h-2.5">
+                <div
+                  className={`h-2.5 rounded-full transition-all ${danger ? 'bg-red-500' : warning ? 'bg-orange-400' : 'bg-emerald-500'}`}
+                  style={{ width: `${Math.min(100, pct)}%` }}
+                />
+              </div>
+            )}
+            {budget > 0 && (
+              <p className={`text-xs mt-1.5 font-medium ${danger ? 'text-red-500' : warning ? 'text-orange-500' : 'text-zinc-400'}`}>
+                {pct}% budżetu wydane
+              </p>
+            )}
+          </button>
+        );
+      })()}
 
       {/* Alert rachunki */}
       {urgentBills.length > 0 && (
@@ -311,7 +354,7 @@ export default function BudzetClient({
         {/* Rachunki cykliczne */}
         <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
           <div className="px-4 py-3 bg-zinc-50 border-b border-zinc-200 flex items-center justify-between">
-            <p className="text-sm font-semibold text-zinc-700">Rachunki cykliczne</p>
+            <p className="text-sm font-semibold text-zinc-700">Koszty stałe</p>
             <button
               onClick={openAddBill}
               className="text-xs px-2 py-1 bg-zinc-200 hover:bg-zinc-300 rounded text-zinc-700"
@@ -367,6 +410,15 @@ export default function BudzetClient({
                   >
                     {editBill ? 'Zapisz' : 'Dodaj'}
                   </button>
+                  {editBill && (
+                    <button
+                      type="button"
+                      onClick={() => { if (confirm(`Usuń "${editBill.name}"?`)) { handleDeleteBill(editBill.id); setShowBillForm(false); setEditBill(null); } }}
+                      className="px-3 py-2 text-sm bg-red-50 border border-red-200 text-red-600 rounded-lg hover:bg-red-100"
+                    >
+                      Usuń
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => { setShowBillForm(false); setEditBill(null); }}
@@ -381,7 +433,11 @@ export default function BudzetClient({
 
           <div className="divide-y divide-zinc-100">
             {bills.map(b => (
-              <div key={b.id} className="flex items-center justify-between px-4 py-3 group">
+              <div
+                key={b.id}
+                onClick={() => openEditBill(b)}
+                className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-zinc-50 active:bg-zinc-100"
+              >
                 <div>
                   <p className="text-sm font-medium text-zinc-800">{b.name}</p>
                   <p className="text-xs text-zinc-400">{b.due_day}. każdego miesiąca</p>
@@ -395,18 +451,7 @@ export default function BudzetClient({
                   }`}>
                     {b.daysLeft === 0 ? 'dziś' : `${b.daysLeft}d`}
                   </span>
-                  <button
-                    onClick={() => openEditBill(b)}
-                    className="text-zinc-300 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-all text-xs"
-                  >
-                    ✏️
-                  </button>
-                  <button
-                    onClick={() => { if (confirm(`Usuń "${b.name}"?`)) handleDeleteBill(b.id); }}
-                    className="text-zinc-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
-                  >
-                    ✕
-                  </button>
+                  <span className="text-zinc-300 text-xs">›</span>
                 </div>
               </div>
             ))}
@@ -416,7 +461,7 @@ export default function BudzetClient({
         {/* Wpisy budżetowe */}
         <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
           <div className="px-4 py-3 bg-zinc-50 border-b border-zinc-200 flex items-center justify-between">
-            <p className="text-sm font-semibold text-zinc-700">Wpisy</p>
+            <p className="text-sm font-semibold text-zinc-700">Koszty zmienne</p>
             <button
               onClick={openAddExp}
               className="text-xs px-2 py-1 bg-zinc-200 hover:bg-zinc-300 rounded text-zinc-700"
@@ -479,6 +524,15 @@ export default function BudzetClient({
                   >
                     {editExp ? 'Zapisz' : 'Dodaj'}
                   </button>
+                  {editExp && (
+                    <button
+                      type="button"
+                      onClick={() => { handleDeleteExp(editExp.id); setShowExpForm(false); setEditExp(null); }}
+                      className="px-3 py-2 text-sm bg-red-50 border border-red-200 text-red-600 rounded-lg hover:bg-red-100"
+                    >
+                      Usuń
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => { setShowExpForm(false); setEditExp(null); }}
@@ -496,7 +550,11 @@ export default function BudzetClient({
               <p className="text-sm text-zinc-400 px-4 py-6 text-center">Brak wpisów w tym miesiącu</p>
             ) : (
               filteredExpenses.map(e => (
-                <div key={e.id} className="flex items-center justify-between px-4 py-2.5 group">
+                <div
+                  key={e.id}
+                  onClick={() => openEditExp(e)}
+                  className="flex items-center justify-between px-4 py-2.5 cursor-pointer hover:bg-zinc-50 active:bg-zinc-100"
+                >
                   <div>
                     <div className="flex items-center gap-2">
                       <span className={`text-xs px-1.5 py-0.5 rounded ${catColors[e.category] || catColors.inne}`}>
@@ -510,18 +568,7 @@ export default function BudzetClient({
                     <span className={`text-sm font-semibold ${e.type === 'przychód' ? 'text-emerald-600' : 'text-zinc-800'}`}>
                       {e.type === 'przychód' ? '+' : ''}{e.amount} zł
                     </span>
-                    <button
-                      onClick={() => openEditExp(e)}
-                      className="text-zinc-200 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-all text-xs"
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      onClick={() => handleDeleteExp(e.id)}
-                      className="text-zinc-200 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
-                    >
-                      ✕
-                    </button>
+                    <span className="text-zinc-300 text-xs">›</span>
                   </div>
                 </div>
               ))

@@ -76,3 +76,16 @@ export async function updatePantryQuantity(id: number, quantity: number) {
   await supabase.from('pantry').update({ quantity }).eq('id', id);
   revalidatePath('/spizarnia');
 }
+
+export async function updatePantryItem(id: number, form: Partial<PantryForm>) {
+  await supabase.from('pantry').update({
+    ...(form.name !== undefined && { name: form.name }),
+    ...(form.quantity !== undefined && { quantity: parseFloat(form.quantity) || 0 }),
+    ...(form.unit !== undefined && { unit: form.unit }),
+    ...(form.category !== undefined && { category: form.category }),
+    ...(form.expiry_days !== undefined && { expiry_days: form.expiry_days ? parseInt(form.expiry_days) : null }),
+  }).eq('id', id);
+  const { data } = await supabase.from('pantry').select().eq('id', id).single();
+  revalidatePath('/spizarnia');
+  return { item: data };
+}
