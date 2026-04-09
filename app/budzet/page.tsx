@@ -21,7 +21,7 @@ export default async function BudzetPage() {
     .order('date', { ascending: false });
 
   const billsData = (bills || []) as Array<{
-    id: number; name: string; amount: number; due_day: number; category: string;
+    id: number; name: string; amount: number; due_day: number; category: string; last_paid_month?: string | null;
   }>;
   const expensesData = (expenses || []) as Array<{
     id: number; date: string; category: string; amount: number; description: string;
@@ -33,6 +33,7 @@ export default async function BudzetPage() {
   const billsWithDaysLeft = billsData.map(b => ({
     ...b,
     daysLeft: b.due_day >= todayDay ? b.due_day - todayDay : 30 - todayDay + b.due_day,
+    paid: b.last_paid_month === currentMonth,
   }));
 
   return (

@@ -92,6 +92,14 @@ export async function updateBill(id: number, form: BillForm) {
   return { bill: data };
 }
 
+export async function toggleBillPaid(id: number, currentMonth: string) {
+  const { data: bill } = await supabase.from('bills').select('last_paid_month').eq('id', id).single();
+  const newMonth = (bill as { last_paid_month?: string } | null)?.last_paid_month === currentMonth ? null : currentMonth;
+  await supabase.from('bills').update({ last_paid_month: newMonth }).eq('id', id);
+  revalidatePath('/budzet');
+  return { paid: newMonth !== null };
+}
+
 export async function deleteBill(id: number) {
   await supabase.from('bills').delete().eq('id', id);
   revalidatePath('/budzet');

@@ -4,7 +4,7 @@ import { useState, useTransition, useRef } from 'react';
 
 import {
   addExpense, updateExpense, deleteExpense,
-  addBill, updateBill, deleteBill,
+  addBill, updateBill, deleteBill, toggleBillPaid,
 } from './actions';
 
 function SvgPie({ data, colors }: { data: { name: string; value: number }[]; colors: string[] }) {
@@ -29,7 +29,7 @@ function SvgPie({ data, colors }: { data: { name: string; value: number }[]; col
   );
 }
 
-type Bill = { id: number; name: string; amount: number; due_day: number; category: string; daysLeft: number };
+type Bill = { id: number; name: string; amount: number; due_day: number; category: string; daysLeft: number; paid: boolean };
 type Expense = {
   id: number; date: string; category: string; amount: number;
   description: string; type: string; notes: string | null;
@@ -215,7 +215,14 @@ export default function BudzetClient({
     });
   }
 
-  const urgentBills = bills.filter(b => b.daysLeft <= 5);
+  function handleTogglePaid(id: number) {
+    startTransition(async () => {
+      const result = await toggleBillPaid(id, currentMonth);
+      setBills(prev => prev.map(b => b.id === id ? { ...b, paid: result.paid } : b));
+    });
+  }
+
+  const urgentBills = bills.filter(b => b.daysLeft <= 5 && !b.paid);
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -437,31 +444,63 @@ export default function BudzetClient({
             </form>
           )}
 
-          <div className="divide-y divide-zinc-100">
-            {bills.map(b => (
-              <div
-                key={b.id}
-                onClick={() => openEditBill(b)}
-                className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-zinc-50 active:bg-zinc-100"
-              >
-                <div>
-                  <p className="text-sm font-medium text-zinc-800">{b.name}</p>
-                  <p className="text-xs text-zinc-400">{b.due_day}. każdego miesiąca</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-zinc-700">{b.amount} zł</span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${
-                    b.daysLeft <= 3 ? 'bg-red-100 text-red-700' :
-                    b.daysLeft <= 7 ? 'bg-orange-100 text-orange-700' :
-                    'bg-zinc-100 text-zinc-500'
-                  }`}>
-                    {b.daysLeft === 0 ? 'dziś' : `${b.daysLeft}d`}
-                  </span>
-                  <span className="text-zinc-300 text-xs">›</span>
-                </div>
+          {(() => {
+            const unpaid = bills.filter(b => !b.paid);
+            const paid = bills.filter(b => b.paid);
+            return (
+              <div className="divide-y divide-zinc-100">
+                {unpaid.map(b => (
+                  <div key={b.id} className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-50 active:bg-zinc-100 transition-colors">
+                    <button
+                      onClick={() => handleTogglePaid(b.id)}
+                      className="w-5 h-5 rounded border-2 border-zinc-300 shrink-0 flex items-center justify-center hover:border-emerald-400 transition-colors"
+                    />
+                    <div onClick={() => openEditBill(b)} className="flex-1 flex items-center justify-between cursor-pointer">
+                      <div>
+                        <p className="text-sm font-medium text-zinc-800">{b.name}</p>
+                        <p className="text-xs text-zinc-400">{b.due_day}. każdego miesiąca</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-zinc-700">{b.amount} zł</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          b.daysLeft <= 3 ? 'bg-red-100 text-red-700' :
+                          b.daysLeft <= 7 ? 'bg-orange-100 text-orange-700' :
+                          'bg-zinc-100 text-zinc-500'
+                        }`}>
+                          {b.daysLeft === 0 ? 'dziś' : `${b.daysLeft}d`}
+                        </span>
+                        <span className="text-zinc-300 text-xs">›</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {paid.length > 0 && (
+                  <>
+                    <div className="px-4 py-1.5 bg-emerald-50">
+                      <p className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wide">✓ Zapłacone w tym miesiącu</p>
+                    </div>
+                    {paid.map(b => (
+                      <div key={b.id} className="flex items-center gap-3 px-4 py-3 bg-emerald-50 hover:bg-emerald-100 transition-colors">
+                        <button
+                          onClick={() => handleTogglePaid(b.id)}
+                          className="w-5 h-5 rounded border-2 bg-emerald-500 border-emerald-500 text-white shrink-0 flex items-center justify-center"
+                        >
+                          <span className="text-[10px] font-bold">✓</span>
+                        </button>
+                        <div onClick={() => openEditBill(b)} className="flex-1 flex items-center justify-between cursor-pointer">
+                          <div>
+                            <p className="text-sm font-medium text-zinc-400 line-through">{b.name}</p>
+                            <p className="text-xs text-zinc-400">{b.due_day}. każdego miesiąca</p>
+                          </div>
+                          <span className="text-sm font-semibold text-emerald-600">{b.amount} zł</span>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
-            ))}
-          </div>
+            );
+          })()}
         </div>
 
         {/* Wpisy budżetowe */}
