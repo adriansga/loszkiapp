@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { generateShoppingList, toggleItem, addItem, deleteList, addSweetsToList } from './actions';
+import { generateShoppingList, toggleItem, addItem, deleteList, addSweetsToList, createEmptyList } from './actions';
 import Link from 'next/link';
 
 type Item = { id: number; name: string; quantity: string; unit: string; checked: number; category: string };
@@ -144,21 +144,35 @@ export default function ShoppingListClient({
         <div className="bg-white rounded-xl p-8 border border-zinc-200 text-center">
           <p className="text-4xl mb-3">🛒</p>
           <p className="text-zinc-600 font-medium mb-1">Brak listy na tydzień {selectedWeek}</p>
-          <p className="text-sm text-zinc-400 mb-5">Wygeneruję listę na podstawie planu obiadów tego tygodnia</p>
-          <button
-            onClick={handleGenerate}
-            disabled={isPending}
-            className="px-5 py-2.5 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 disabled:opacity-50"
-          >
-            {isPending ? 'Generuję…' : '✨ Generuj listę zakupów'}
-          </button>
+          <p className="text-sm text-zinc-400 mb-5">Wygeneruję listę na podstawie planu obiadów lub stwórz pustą ręcznie</p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <button
+              onClick={handleGenerate}
+              disabled={isPending}
+              className="px-5 py-2.5 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {isPending ? 'Generuję…' : '✨ Generuj z planu obiadów'}
+            </button>
+            <button
+              onClick={async () => {
+                setIsPending(true);
+                const r = await createEmptyList(selectedWeek);
+                if (r.listId) { setListId(r.listId); setItems(r.items as Item[]); }
+                setIsPending(false);
+              }}
+              disabled={isPending}
+              className="px-5 py-2.5 bg-white border border-zinc-300 text-zinc-700 rounded-lg font-medium hover:bg-zinc-50 disabled:opacity-50"
+            >
+              + Dodaj ręcznie (pusta lista)
+            </button>
+          </div>
           {genError && (
             <p className="text-xs text-red-500 mt-2 bg-red-50 px-3 py-2 rounded-lg">
               Błąd: {genError}
             </p>
           )}
           <p className="text-xs text-zinc-400 mt-3">
-            Lista uwzględni stany spiżarni (co już masz)
+            Lista z generowania uwzględni stany spiżarni (co już masz)
           </p>
         </div>
       ) : (

@@ -294,6 +294,26 @@ export async function addSweetsToList(listId: number) {
   return { items: items || [] };
 }
 
+export async function createEmptyList(weekNumber: number) {
+  // Sprawdź czy już istnieje
+  const { data: existing } = await supabase
+    .from('shopping_lists')
+    .select('id')
+    .eq('week_number', weekNumber)
+    .eq('status', 'active')
+    .maybeSingle();
+  if (existing) {
+    const { data: items } = await supabase.from('shopping_items').select('*').eq('list_id', existing.id).order('category');
+    return { listId: existing.id, items: items || [] };
+  }
+  const { data: list } = await supabase
+    .from('shopping_lists')
+    .insert({ week_number: weekNumber, created_at: new Date().toISOString(), status: 'active' })
+    .select('id')
+    .maybeSingle();
+  return { listId: list?.id ?? null, items: [] };
+}
+
 export async function deleteList(listId: number) {
   await supabase.from('shopping_items').delete().eq('list_id', listId);
   await supabase.from('shopping_lists').delete().eq('id', listId);

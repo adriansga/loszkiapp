@@ -63,6 +63,63 @@ function emptyBillForm() {
   return { name: '', amount: '', due_day: '10', category: 'czynsz' };
 }
 
+function BillInlineForm({ b, inlineForm, setInlineForm, isPending, onSave, onDelete, onCancel }: {
+  b: Bill;
+  inlineForm: ReturnType<typeof emptyBillForm>;
+  setInlineForm: React.Dispatch<React.SetStateAction<ReturnType<typeof emptyBillForm>>>;
+  isPending: boolean;
+  onSave: (e: React.FormEvent) => void;
+  onDelete: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <form onSubmit={onSave} className="px-4 py-3 bg-zinc-50 border-t border-zinc-200">
+      <div className="flex flex-col gap-2">
+        <input
+          value={inlineForm.name}
+          onChange={e => setInlineForm(p => ({ ...p, name: e.target.value }))}
+          placeholder="Nazwa"
+          className="px-3 py-1.5 text-sm border border-zinc-200 rounded-lg bg-white"
+          required
+        />
+        <div className="flex gap-2">
+          <input
+            value={inlineForm.amount}
+            onChange={e => setInlineForm(p => ({ ...p, amount: e.target.value }))}
+            placeholder="Kwota"
+            type="number"
+            step="0.01"
+            className="flex-1 px-3 py-1.5 text-sm border border-zinc-200 rounded-lg bg-white"
+            required
+          />
+          <input
+            value={inlineForm.due_day}
+            onChange={e => setInlineForm(p => ({ ...p, due_day: e.target.value }))}
+            placeholder="Dzień"
+            type="number"
+            min="1"
+            max="31"
+            className="w-20 px-3 py-1.5 text-sm border border-zinc-200 rounded-lg bg-white"
+            required
+          />
+          <select
+            value={inlineForm.category}
+            onChange={e => setInlineForm(p => ({ ...p, category: e.target.value }))}
+            className="px-2 py-1.5 text-sm border border-zinc-200 rounded-lg bg-white"
+          >
+            {BILL_CATEGORIES.map(c => <option key={c}>{c}</option>)}
+          </select>
+        </div>
+        <div className="flex gap-2">
+          <button type="submit" disabled={isPending} className="flex-1 py-1.5 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50">Zapisz</button>
+          <button type="button" onClick={onDelete} className="px-3 py-1.5 text-sm bg-red-50 border border-red-200 text-red-600 rounded-lg hover:bg-red-100">Usuń</button>
+          <button type="button" onClick={onCancel} className="px-3 py-1.5 text-sm border border-zinc-200 rounded-lg hover:bg-zinc-100">Anuluj</button>
+        </div>
+      </div>
+    </form>
+  );
+}
+
 export default function BudzetClient({
   bills: initialBills,
   expenses: initialExpenses,
@@ -82,10 +139,12 @@ export default function BudzetClient({
   const [editExp, setEditExp] = useState<Expense | null>(null);
   const [expForm, setExpForm] = useState(emptyExpenseForm(currentMonth));
 
-  // Bill form
+  // Bill form (top — tylko dla dodawania nowych)
   const [showBillForm, setShowBillForm] = useState(false);
-  const [editBill, setEditBill] = useState<Bill | null>(null);
   const [billForm, setBillForm] = useState(emptyBillForm());
+  // Inline edit — który wiersz jest rozwinięty
+  const [inlineEditId, setInlineEditId] = useState<number | null>(null);
+  const [inlineForm, setInlineForm] = useState(emptyBillForm());
 
   // Month filter
   const [filterMonth, setFilterMonth] = useState(currentMonth);
@@ -166,45 +225,51 @@ export default function BudzetClient({
   // ─── Bill handlers ───────────────────────────────────────────────────────────
 
   function openAddBill() {
-    setEditBill(null);
     setBillForm(emptyBillForm());
     setShowBillForm(true);
+    setInlineEditId(null);
     setTimeout(() => billFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
   }
 
-  function openEditBill(b: Bill) {
-    setEditBill(b);
-    setBillForm({ name: b.name, amount: String(b.amount), due_day: String(b.due_day), category: b.category });
-    setShowBillForm(true);
+  function openInlineEdit(b: Bill) {
+    if (inlineEditId === b.id) { setInlineEditId(null); return; }
+    setInlineEditId(b.id);
+    setInlineForm({ name: b.name, amount: String(b.amount), due_day: String(b.due_day), category: b.category });
+    setShowBillForm(false);
   }
 
   function handleBillSubmit(ev: React.FormEvent) {
     ev.preventDefault();
     if (!billForm.amount || !billForm.name) return;
     startTransition(async () => {
-      if (editBill) {
-        const result = await updateBill(editBill.id, billForm);
-        if (result.bill) {
-          const today = new Date().getDate();
-          const dd = parseInt(billForm.due_day);
-          setBills(prev => prev.map(b => b.id === editBill.id ? {
-            ...result.bill as Bill,
-            daysLeft: dd >= today ? dd - today : 30 - today + dd,
-          } : b));
-        }
-      } else {
-        const result = await addBill(billForm);
-        if (result.bill) {
-          const today = new Date().getDate();
-          const dd = parseInt(billForm.due_day);
-          setBills(prev => [...prev, {
-            ...result.bill as Bill,
-            daysLeft: dd >= today ? dd - today : 30 - today + dd,
-          }].sort((a, b) => a.due_day - b.due_day));
-        }
+      const result = await addBill(billForm);
+      if (result.bill) {
+        const today = new Date().getDate();
+        const dd = parseInt(billForm.due_day);
+        setBills(prev => [...prev, {
+          ...result.bill as Bill,
+          paid: false,
+          daysLeft: dd >= today ? dd - today : 30 - today + dd,
+        }].sort((a, b) => a.due_day - b.due_day));
       }
       setShowBillForm(false);
-      setEditBill(null);
+    });
+  }
+
+  function handleInlineSave(ev: React.FormEvent, billId: number) {
+    ev.preventDefault();
+    if (!inlineForm.amount || !inlineForm.name) return;
+    startTransition(async () => {
+      const result = await updateBill(billId, inlineForm);
+      if (result.bill) {
+        const today = new Date().getDate();
+        const dd = parseInt(inlineForm.due_day);
+        setBills(prev => prev.map(b => b.id === billId ? {
+          ...b, ...result.bill as Bill,
+          daysLeft: dd >= today ? dd - today : 30 - today + dd,
+        } : b));
+      }
+      setInlineEditId(null);
     });
   }
 
@@ -378,7 +443,7 @@ export default function BudzetClient({
           <div ref={billFormRef} />
           {showBillForm && (
             <form onSubmit={handleBillSubmit} className="p-4 border-b border-zinc-100 bg-zinc-50">
-              <p className="text-xs font-semibold text-zinc-500 mb-2">{editBill ? 'Edytuj rachunek' : 'Nowy rachunek'}</p>
+              <p className="text-xs font-semibold text-zinc-500 mb-2">Nowy rachunek cykliczny</p>
               <div className="flex flex-col gap-2">
                 <input
                   value={billForm.name}
@@ -400,11 +465,11 @@ export default function BudzetClient({
                   <input
                     value={billForm.due_day}
                     onChange={e => setBillForm(p => ({ ...p, due_day: e.target.value }))}
-                    placeholder="Dzień (1-31)"
+                    placeholder="Dzień płatności"
                     type="number"
                     min="1"
                     max="31"
-                    className="w-24 px-3 py-2 text-sm border border-zinc-200 rounded-lg"
+                    className="w-28 px-3 py-2 text-sm border border-zinc-200 rounded-lg"
                     required
                   />
                   <select
@@ -416,29 +481,8 @@ export default function BudzetClient({
                   </select>
                 </div>
                 <div className="flex gap-2">
-                  <button
-                    type="submit"
-                    disabled={isPending}
-                    className="flex-1 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
-                  >
-                    {editBill ? 'Zapisz' : 'Dodaj'}
-                  </button>
-                  {editBill && (
-                    <button
-                      type="button"
-                      onClick={() => { if (confirm(`Usuń "${editBill.name}"?`)) { handleDeleteBill(editBill.id); setShowBillForm(false); setEditBill(null); } }}
-                      className="px-3 py-2 text-sm bg-red-50 border border-red-200 text-red-600 rounded-lg hover:bg-red-100"
-                    >
-                      Usuń
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => { setShowBillForm(false); setEditBill(null); }}
-                    className="px-3 py-2 text-sm border border-zinc-200 rounded-lg hover:bg-zinc-100"
-                  >
-                    Anuluj
-                  </button>
+                  <button type="submit" disabled={isPending} className="flex-1 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50">Dodaj</button>
+                  <button type="button" onClick={() => setShowBillForm(false)} className="px-3 py-2 text-sm border border-zinc-200 rounded-lg hover:bg-zinc-100">Anuluj</button>
                 </div>
               </div>
             </form>
@@ -447,31 +491,35 @@ export default function BudzetClient({
           {(() => {
             const unpaid = bills.filter(b => !b.paid);
             const paid = bills.filter(b => b.paid);
+
             return (
               <div className="divide-y divide-zinc-100">
                 {unpaid.map(b => (
-                  <div key={b.id} className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-50 active:bg-zinc-100 transition-colors">
-                    <button
-                      onClick={() => handleTogglePaid(b.id)}
-                      className="w-5 h-5 rounded border-2 border-zinc-300 shrink-0 flex items-center justify-center hover:border-emerald-400 transition-colors"
-                    />
-                    <div onClick={() => openEditBill(b)} className="flex-1 flex items-center justify-between cursor-pointer">
-                      <div>
-                        <p className="text-sm font-medium text-zinc-800">{b.name}</p>
-                        <p className="text-xs text-zinc-400">{b.due_day}. każdego miesiąca</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-zinc-700">{b.amount} zł</span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                          b.daysLeft <= 3 ? 'bg-red-100 text-red-700' :
-                          b.daysLeft <= 7 ? 'bg-orange-100 text-orange-700' :
-                          'bg-zinc-100 text-zinc-500'
-                        }`}>
-                          {b.daysLeft === 0 ? 'dziś' : `${b.daysLeft}d`}
-                        </span>
-                        <span className="text-zinc-300 text-xs">›</span>
+                  <div key={b.id}>
+                    <div className={`flex items-center gap-3 px-4 py-3 transition-colors ${inlineEditId === b.id ? 'bg-zinc-50' : 'hover:bg-zinc-50'}`}>
+                      <button
+                        onClick={() => handleTogglePaid(b.id)}
+                        className="w-5 h-5 rounded border-2 border-zinc-300 shrink-0 flex items-center justify-center hover:border-emerald-400 transition-colors"
+                      />
+                      <div onClick={() => openInlineEdit(b)} className="flex-1 flex items-center justify-between cursor-pointer">
+                        <div>
+                          <p className="text-sm font-medium text-zinc-800">{b.name}</p>
+                          <p className="text-xs text-zinc-400">{b.due_day}. każdego miesiąca</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-zinc-700">{b.amount} zł</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            b.daysLeft <= 3 ? 'bg-red-100 text-red-700' :
+                            b.daysLeft <= 7 ? 'bg-orange-100 text-orange-700' :
+                            'bg-zinc-100 text-zinc-500'
+                          }`}>
+                            {b.daysLeft === 0 ? 'dziś' : `${b.daysLeft}d`}
+                          </span>
+                          <span className={`text-zinc-400 text-xs transition-transform ${inlineEditId === b.id ? 'rotate-90' : ''}`}>›</span>
+                        </div>
                       </div>
                     </div>
+                    {inlineEditId === b.id && <BillInlineForm b={b} inlineForm={inlineForm} setInlineForm={setInlineForm} isPending={isPending} onSave={e => handleInlineSave(e, b.id)} onDelete={() => { if (confirm(`Usuń "${b.name}"?`)) { handleDeleteBill(b.id); setInlineEditId(null); } }} onCancel={() => setInlineEditId(null)} />}
                   </div>
                 ))}
                 {paid.length > 0 && (
@@ -480,20 +528,26 @@ export default function BudzetClient({
                       <p className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wide">✓ Zapłacone w tym miesiącu</p>
                     </div>
                     {paid.map(b => (
-                      <div key={b.id} className="flex items-center gap-3 px-4 py-3 bg-emerald-50 hover:bg-emerald-100 transition-colors">
-                        <button
-                          onClick={() => handleTogglePaid(b.id)}
-                          className="w-5 h-5 rounded border-2 bg-emerald-500 border-emerald-500 text-white shrink-0 flex items-center justify-center"
-                        >
-                          <span className="text-[10px] font-bold">✓</span>
-                        </button>
-                        <div onClick={() => openEditBill(b)} className="flex-1 flex items-center justify-between cursor-pointer">
-                          <div>
-                            <p className="text-sm font-medium text-zinc-400 line-through">{b.name}</p>
-                            <p className="text-xs text-zinc-400">{b.due_day}. każdego miesiąca</p>
+                      <div key={b.id}>
+                        <div className={`flex items-center gap-3 px-4 py-3 bg-emerald-50 transition-colors ${inlineEditId === b.id ? '' : 'hover:bg-emerald-100'}`}>
+                          <button
+                            onClick={() => handleTogglePaid(b.id)}
+                            className="w-5 h-5 rounded border-2 bg-emerald-500 border-emerald-500 text-white shrink-0 flex items-center justify-center"
+                          >
+                            <span className="text-[10px] font-bold">✓</span>
+                          </button>
+                          <div onClick={() => openInlineEdit(b)} className="flex-1 flex items-center justify-between cursor-pointer">
+                            <div>
+                              <p className="text-sm font-medium text-zinc-400 line-through">{b.name}</p>
+                              <p className="text-xs text-zinc-400">{b.due_day}. każdego miesiąca</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-semibold text-emerald-600">{b.amount} zł</span>
+                              <span className={`text-zinc-400 text-xs transition-transform ${inlineEditId === b.id ? 'rotate-90' : ''}`}>›</span>
+                            </div>
                           </div>
-                          <span className="text-sm font-semibold text-emerald-600">{b.amount} zł</span>
                         </div>
+                        {inlineEditId === b.id && <BillInlineForm b={b} inlineForm={inlineForm} setInlineForm={setInlineForm} isPending={isPending} onSave={e => handleInlineSave(e, b.id)} onDelete={() => { if (confirm(`Usuń "${b.name}"?`)) { handleDeleteBill(b.id); setInlineEditId(null); } }} onCancel={() => setInlineEditId(null)} />}
                       </div>
                     ))}
                   </>
