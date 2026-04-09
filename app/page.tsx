@@ -88,11 +88,11 @@ export default async function DashboardPage() {
         <p className="text-zinc-500 text-sm mt-0.5">Tydzień {weekNum}</p>
       </div>
 
-      {/* Wiersz 1: Kalendarz (col-span-2) + Płatności */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+      {/* Kafelki: 2x2 grid — Kalendarz, Obiad, Płatności, Spiżarnia */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
 
-        {/* Dziś w kalendarzu */}
-        <Link href="/kalendarz" className="md:col-span-2 bg-white rounded-xl p-5 border border-zinc-200 shadow-sm hover:border-emerald-400 hover:shadow-md transition-all block">
+        {/* 1. Dziś w kalendarzu */}
+        <Link href="/kalendarz" className="bg-white rounded-xl p-5 border border-zinc-200 shadow-sm hover:border-emerald-400 hover:shadow-md transition-all block">
           <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2">📅 Dziś w kalendarzu</p>
           {!visibleEvents.length ? (
             <p className="text-sm text-zinc-400">Nic zaplanowanego na dziś</p>
@@ -116,31 +116,8 @@ export default async function DashboardPage() {
           <p className="text-xs text-emerald-500 mt-3">→ Kalendarz</p>
         </Link>
 
-        {/* Płatności */}
-        <Link href="/budzet" className="bg-white rounded-xl p-5 border border-zinc-200 shadow-sm hover:border-orange-300 hover:shadow-md transition-all block">
-          <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2">💳 Płatności</p>
-          {visibleBills.length === 0 ? (
-            <p className="text-sm text-emerald-600">✓ Nic w tym tygodniu</p>
-          ) : (
-            <div className="flex flex-col gap-1.5">
-              {visibleBills.map((b, i) => (
-                <div key={i} className="text-xs">
-                  <span className="font-medium text-zinc-700">{b.name}</span>
-                  <span className="text-zinc-400"> — {b.due_day}. ({b.amount} zł)</span>
-                </div>
-              ))}
-              {moreBills > 0 && <p className="text-xs text-zinc-400">+{moreBills} więcej…</p>}
-            </div>
-          )}
-          <p className="text-xs text-orange-400 mt-3">→ Budżet</p>
-        </Link>
-      </div>
-
-      {/* Wiersz 2: Obiad (col-span-2) + Spiżarnia */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-
-        {/* Dziś na obiad — link do konkretnego kafelka z przepisem */}
-        <Link href={`/obiady?day=${dayOfWeek}`} className="md:col-span-2 bg-white rounded-xl p-5 border border-zinc-200 shadow-sm hover:border-emerald-400 hover:shadow-md transition-all block">
+        {/* 2. Dziś na obiad */}
+        <Link href={`/obiady?day=${dayOfWeek}`} className="bg-white rounded-xl p-5 border border-zinc-200 shadow-sm hover:border-emerald-400 hover:shadow-md transition-all block">
           <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2">🍽️ Dziś na obiad</p>
           {todayMeal ? (
             <>
@@ -162,7 +139,26 @@ export default async function DashboardPage() {
           )}
         </Link>
 
-        {/* Spiżarnia */}
+        {/* 3. Płatności */}
+        <Link href="/budzet" className="bg-white rounded-xl p-5 border border-zinc-200 shadow-sm hover:border-orange-300 hover:shadow-md transition-all block">
+          <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2">💳 Płatności</p>
+          {visibleBills.length === 0 ? (
+            <p className="text-sm text-emerald-600">✓ Nic w tym tygodniu</p>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              {visibleBills.map((b, i) => (
+                <div key={i} className="text-xs">
+                  <span className="font-medium text-zinc-700">{b.name}</span>
+                  <span className="text-zinc-400"> — {b.due_day}. ({b.amount} zł)</span>
+                </div>
+              ))}
+              {moreBills > 0 && <p className="text-xs text-zinc-400">+{moreBills} więcej…</p>}
+            </div>
+          )}
+          <p className="text-xs text-orange-400 mt-3">→ Budżet</p>
+        </Link>
+
+        {/* 4. Spiżarnia */}
         <Link href="/spizarnia" className="bg-white rounded-xl p-5 border border-zinc-200 shadow-sm hover:border-red-300 hover:shadow-md transition-all block">
           <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2">📦 Spiżarnia</p>
           {visibleExpiring.length === 0 ? (
