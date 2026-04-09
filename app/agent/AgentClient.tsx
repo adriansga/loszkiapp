@@ -127,6 +127,7 @@ export default function AgentClient() {
       {pendingImage && (
         <div className="px-6 pb-2">
           <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={pendingImage.preview} alt="paragon" className="w-12 h-12 object-cover rounded-lg" />
             <p className="text-sm text-emerald-700 flex-1">Zdjęcie gotowe do wysłania</p>
             <button onClick={() => setPendingImage(null)} className="text-zinc-400 hover:text-zinc-700 text-lg">✕</button>

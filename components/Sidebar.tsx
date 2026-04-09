@@ -22,7 +22,6 @@ const secondaryNav = [
   { href: '/statystyki', label: 'Statystyki', icon: '📊' },
 ];
 
-const allNav = [...primaryNav, ...secondaryNav];
 const mobileNav = primaryNav; // 7 głównych w bottom nav
 
 export default function Sidebar() {
