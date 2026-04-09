@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/db';
-import webpush from 'web-push';
+import * as webpush from 'web-push';
 
 webpush.setVapidDetails(
   process.env.VAPID_SUBJECT!,
