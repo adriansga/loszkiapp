@@ -89,7 +89,12 @@ export default function KalendarzClient({
   const [pushEnabled, setPushEnabled] = useState(false);
 
   useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'granted') setPushEnabled(true);
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    navigator.serviceWorker.ready.then(reg => {
+      reg.pushManager.getSubscription().then(sub => {
+        if (sub) setPushEnabled(true);
+      });
+    });
   }, []);
 
   function openAdd(date: string) {
