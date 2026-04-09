@@ -10,6 +10,7 @@ const nav = [
   { href: '/zakupy', label: 'Zakupy', icon: '🛒' },
   { href: '/spizarnia', label: 'Spiżarnia', icon: '📦' },
   { href: '/budzet', label: 'Budżet', icon: '💰' },
+  { href: '/kalendarz', label: 'Kalendarz', icon: '📅' },
   { href: '/agent', label: 'Agent', icon: '🤖' },
 ];
 
