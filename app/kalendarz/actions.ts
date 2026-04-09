@@ -9,6 +9,7 @@ export async function addEvent(form: {
   time?: string;
   owner: string;
   notes?: string;
+  reminder_days?: number;
 }) {
   await supabase.from('calendar_events').insert({
     title: form.title,
@@ -16,6 +17,7 @@ export async function addEvent(form: {
     time: form.time || null,
     owner: form.owner,
     notes: form.notes || null,
+    reminder_days: form.reminder_days ?? null,
   });
   revalidatePath('/kalendarz');
 }
