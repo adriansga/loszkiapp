@@ -25,6 +25,8 @@ const ownerStyles: Record<string, string> = {
 };
 const ownerLabels: Record<string, string> = { adrian: 'Adrian', kasia: 'Kasia', oboje: 'Oboje' };
 
+const MAX_ITEMS = 5;
+
 export default async function DashboardPage() {
   const today = new Date();
   const weekNum = getWeekNumber(today);
@@ -41,7 +43,7 @@ export default async function DashboardPage() {
     supabase.from('weekly_plan').select('*, meals(*)').eq('week_number', weekNum).eq('day_of_week', dayOfWeek).single(),
     supabase.from('weekly_plan').select('*, meals(name, protein_rating, prep_time)').eq('week_number', weekNum).order('day_of_week'),
     supabase.from('bills').select('*').eq('active', true).order('due_day'),
-    supabase.from('pantry').select('*').not('purchase_date', 'is', null).not('expiry_days', 'is', null).limit(5),
+    supabase.from('pantry').select('*').not('purchase_date', 'is', null).not('expiry_days', 'is', null).limit(10),
     supabase.from('calendar_events').select('*').eq('date', todayStr).order('time', { ascending: true, nullsFirst: false }),
   ]);
 
@@ -59,7 +61,6 @@ export default async function DashboardPage() {
     return daysLeft >= 0 && daysLeft <= 7;
   });
 
-  // Wygasające produkty ze spiżarni
   const expiringItems = (pantryExpiring || []).filter(p => {
     if (!p.purchase_date || !p.expiry_days) return false;
     const purchased = new Date(p.purchase_date);
@@ -67,6 +68,16 @@ export default async function DashboardPage() {
     const daysLeft = Math.ceil((expiry.getTime() - today.getTime()) / 86400000);
     return daysLeft <= 3;
   });
+
+  const events = todayEvents || [];
+  const visibleEvents = events.slice(0, MAX_ITEMS);
+  const moreEvents = events.length - visibleEvents.length;
+
+  const visibleBills = upcomingBills.slice(0, MAX_ITEMS);
+  const moreBills = upcomingBills.length - visibleBills.length;
+
+  const visibleExpiring = expiringItems.slice(0, MAX_ITEMS);
+  const moreExpiring = expiringItems.length - visibleExpiring.length;
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto">
@@ -77,11 +88,59 @@ export default async function DashboardPage() {
         <p className="text-zinc-500 text-sm mt-0.5">Tydzień {weekNum}</p>
       </div>
 
-      {/* Górna siatka: obiad + kalendarz + alerty */}
+      {/* Wiersz 1: Kalendarz (col-span-2) + Spiżarnia */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
 
-        {/* Dziś na obiad — cały kafelek klikalny */}
-        <Link href="/obiady" className="md:col-span-2 bg-white rounded-xl p-5 border border-zinc-200 shadow-sm hover:border-emerald-400 hover:shadow-md transition-all block">
+        {/* Dziś w kalendarzu */}
+        <Link href="/kalendarz" className="md:col-span-2 bg-white rounded-xl p-5 border border-zinc-200 shadow-sm hover:border-emerald-400 hover:shadow-md transition-all block">
+          <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2">📅 Dziś w kalendarzu</p>
+          {!visibleEvents.length ? (
+            <p className="text-sm text-zinc-400">Nic zaplanowanego na dziś</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {visibleEvents.map(ev => (
+                <div key={ev.id} className="flex items-start gap-2.5">
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0 mt-0.5 ${ownerStyles[ev.owner] || 'bg-zinc-100 text-zinc-600'}`}>
+                    {ownerLabels[ev.owner] || ev.owner}
+                  </span>
+                  <div>
+                    <p className="text-sm font-medium text-zinc-800">{ev.title}</p>
+                    {ev.time && <p className="text-xs text-zinc-400">{ev.time}</p>}
+                    {ev.notes && <p className="text-xs text-zinc-400">{ev.notes}</p>}
+                  </div>
+                </div>
+              ))}
+              {moreEvents > 0 && <p className="text-xs text-zinc-400">+{moreEvents} więcej…</p>}
+            </div>
+          )}
+          <p className="text-xs text-emerald-500 mt-3">→ Kalendarz</p>
+        </Link>
+
+        {/* Spiżarnia */}
+        <Link href="/spizarnia" className="bg-white rounded-xl p-5 border border-zinc-200 shadow-sm hover:border-red-300 hover:shadow-md transition-all block">
+          <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2">📦 Spiżarnia</p>
+          {visibleExpiring.length === 0 ? (
+            <p className="text-sm text-emerald-600">✓ Nic nie wygasa</p>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              {visibleExpiring.map((p, i) => (
+                <div key={i} className="text-xs">
+                  <span className="text-red-500">⚠️ </span>
+                  <span className="font-medium text-zinc-700">{p.name}</span>
+                </div>
+              ))}
+              {moreExpiring > 0 && <p className="text-xs text-zinc-400">+{moreExpiring} więcej…</p>}
+            </div>
+          )}
+          <p className="text-xs text-red-400 mt-3">→ Spiżarnia</p>
+        </Link>
+      </div>
+
+      {/* Wiersz 2: Obiad (col-span-2) + Płatności */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+
+        {/* Dziś na obiad — link do konkretnego kafelka z przepisem */}
+        <Link href={`/obiady?day=${dayOfWeek}`} className="md:col-span-2 bg-white rounded-xl p-5 border border-zinc-200 shadow-sm hover:border-emerald-400 hover:shadow-md transition-all block">
           <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2">🍽️ Dziś na obiad</p>
           {todayMeal ? (
             <>
@@ -103,64 +162,23 @@ export default async function DashboardPage() {
           )}
         </Link>
 
-        {/* Płatności — klikalny, do budżetu */}
+        {/* Płatności */}
         <Link href="/budzet" className="bg-white rounded-xl p-5 border border-zinc-200 shadow-sm hover:border-orange-300 hover:shadow-md transition-all block">
           <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2">💳 Płatności</p>
-          {upcomingBills.length === 0 ? (
+          {visibleBills.length === 0 ? (
             <p className="text-sm text-emerald-600">✓ Nic w tym tygodniu</p>
           ) : (
             <div className="flex flex-col gap-1.5">
-              {upcomingBills.map((b, i) => (
+              {visibleBills.map((b, i) => (
                 <div key={i} className="text-xs">
                   <span className="font-medium text-zinc-700">{b.name}</span>
                   <span className="text-zinc-400"> — {b.due_day}. ({b.amount} zł)</span>
                 </div>
               ))}
+              {moreBills > 0 && <p className="text-xs text-zinc-400">+{moreBills} więcej…</p>}
             </div>
           )}
           <p className="text-xs text-orange-400 mt-3">→ Budżet</p>
-        </Link>
-
-        {/* Dziś w kalendarzu — cały kafelek klikalny */}
-        <Link href="/kalendarz" className="md:col-span-2 bg-white rounded-xl p-5 border border-zinc-200 shadow-sm hover:border-emerald-400 hover:shadow-md transition-all block">
-          <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2">📅 Dziś w kalendarzu</p>
-          {!todayEvents?.length ? (
-            <p className="text-sm text-zinc-400">Nic zaplanowanego na dziś</p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {todayEvents.map(ev => (
-                <div key={ev.id} className="flex items-start gap-2.5">
-                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium shrink-0 mt-0.5 ${ownerStyles[ev.owner] || 'bg-zinc-100 text-zinc-600'}`}>
-                    {ownerLabels[ev.owner] || ev.owner}
-                  </span>
-                  <div>
-                    <p className="text-sm font-medium text-zinc-800">{ev.title}</p>
-                    {ev.time && <p className="text-xs text-zinc-400">{ev.time}</p>}
-                    {ev.notes && <p className="text-xs text-zinc-400">{ev.notes}</p>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          <p className="text-xs text-emerald-500 mt-3">→ Kalendarz</p>
-        </Link>
-
-        {/* Spiżarnia — klikalny, do spiżarni */}
-        <Link href="/spizarnia" className="bg-white rounded-xl p-5 border border-zinc-200 shadow-sm hover:border-red-300 hover:shadow-md transition-all block">
-          <p className="text-xs font-medium text-zinc-400 uppercase tracking-wide mb-2">📦 Spiżarnia</p>
-          {expiringItems.length === 0 ? (
-            <p className="text-sm text-emerald-600">✓ Nic nie wygasa</p>
-          ) : (
-            <div className="flex flex-col gap-1.5">
-              {expiringItems.map((p, i) => (
-                <div key={i} className="text-xs">
-                  <span className="text-red-500">⚠️ </span>
-                  <span className="font-medium text-zinc-700">{p.name}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          <p className="text-xs text-red-400 mt-3">→ Spiżarnia</p>
         </Link>
       </div>
 

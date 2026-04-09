@@ -26,13 +26,14 @@ const categoryLabels: Record<string, string> = {
 export default async function ObiadyPage({
   searchParams,
 }: {
-  searchParams: Promise<{ week?: string; view?: string }>;
+  searchParams: Promise<{ week?: string; view?: string; day?: string }>;
 }) {
   const params = await searchParams;
   const today = new Date();
   const currentWeek = getWeekNumber(today);
   const selectedWeek = params.week ? parseInt(params.week) : currentWeek;
   const view = params.view || 'week';
+  const autoOpenDay = params.day ? parseInt(params.day) : null;
 
   const { data: weekPlan } = await supabase
     .from('weekly_plan')
@@ -142,7 +143,7 @@ export default async function ObiadyPage({
             </div>
           ) : (
             weekMeals.map(meal => (
-              <MealCard key={meal.day_of_week} meal={meal} />
+              <MealCard key={meal.day_of_week} meal={meal} autoOpen={autoOpenDay === meal.day_of_week} />
             ))
           )}
           {weekMeals.length > 0 && (

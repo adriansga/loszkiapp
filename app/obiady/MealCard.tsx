@@ -21,8 +21,8 @@ const proteinColors: Record<string, string> = {
 const proteinLabels: Record<string, string> = { hi: '💪💪💪 >90g', md: '💪💪 60–90g', ok: '💪 30–60g', lo: '⚠️ <30g' };
 const dayLabels = ['', 'Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota', 'Niedziela'];
 
-export function MealCard({ meal }: { meal: Meal }) {
-  const [open, setOpen] = useState(false);
+export function MealCard({ meal, autoOpen }: { meal: Meal; autoOpen?: boolean }) {
+  const [open, setOpen] = useState(autoOpen ?? false);
   const hasRecipe = !!(meal.recipe || meal.ingredients);
 
   return (
