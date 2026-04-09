@@ -3,7 +3,13 @@
 import { useState, useTransition } from 'react';
 import { addNote, updateNote, deleteNote } from './actions';
 
-type Note = { id: string; owner: string; title: string; body: string | null; color: string; pinned: boolean; created_at: string };
+type Note = { id: string; owner: string; title: string; body: string | null; color: string; pinned: boolean; priority: boolean; created_at: string };
+
+const OWNER_COLORS: Record<string, string> = {
+  adrian: 'blue',
+  kasia: 'pink',
+  oboje: 'yellow',
+};
 
 const COLORS: Record<string, { bg: string; border: string; dot: string }> = {
   red:    { bg: 'bg-red-50',    border: 'border-red-400',    dot: 'bg-red-500' },
@@ -14,6 +20,8 @@ const COLORS: Record<string, { bg: string; border: string; dot: string }> = {
   zinc:   { bg: 'bg-white',     border: 'border-zinc-200',   dot: 'bg-zinc-400' },
 };
 
+const PRIORITY_STYLE = { bg: 'bg-red-50', border: 'border-red-400' };
+
 const ownerStyles: Record<string, string> = {
   adrian: 'bg-blue-100 text-blue-700',
   kasia: 'bg-pink-100 text-pink-700',
@@ -21,13 +29,23 @@ const ownerStyles: Record<string, string> = {
 };
 const ownerLabels: Record<string, string> = { adrian: 'Adrian', kasia: 'Kasia', oboje: 'Oboje' };
 
+function emptyForm() {
+  return { title: '', body: '', color: 'yellow', owner: 'oboje', priority: false };
+}
+
 export default function NotatkiClient({ initialNotes }: { initialNotes: Note[] }) {
   const [notes, setNotes] = useState(initialNotes);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ title: '', body: '', color: 'yellow', owner: 'oboje' });
+  const [form, setForm] = useState(emptyForm());
   const [editId, setEditId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ title: '', body: '', color: 'yellow', owner: 'oboje' });
+  const [editForm, setEditForm] = useState(emptyForm());
   const [isPending, startTransition] = useTransition();
+
+  function handleOwnerChange(owner: string, target: 'form' | 'edit') {
+    const color = OWNER_COLORS[owner] || 'yellow';
+    if (target === 'form') setForm(p => ({ ...p, owner, color }));
+    else setEditForm(p => ({ ...p, owner, color }));
+  }
 
   function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -36,7 +54,7 @@ export default function NotatkiClient({ initialNotes }: { initialNotes: Note[] }
       const result = await addNote(form);
       if (result) {
         setNotes(prev => [result as Note, ...prev]);
-        setForm({ title: '', body: '', color: 'yellow', owner: 'oboje' });
+        setForm(emptyForm());
         setShowForm(false);
       }
     });
@@ -44,7 +62,7 @@ export default function NotatkiClient({ initialNotes }: { initialNotes: Note[] }
 
   function handleEditOpen(note: Note) {
     setEditId(note.id);
-    setEditForm({ title: note.title, body: note.body || '', color: note.color, owner: note.owner });
+    setEditForm({ title: note.title, body: note.body || '', color: note.color, owner: note.owner, priority: note.priority ?? false });
   }
 
   function handleEditSave(e: React.FormEvent) {
@@ -88,7 +106,7 @@ export default function NotatkiClient({ initialNotes }: { initialNotes: Note[] }
         </button>
       </div>
 
-      {/* Formularz */}
+      {/* Formularz dodawania */}
       {showForm && (
         <form onSubmit={handleAdd} className="bg-white rounded-xl p-5 border border-zinc-200 mb-5 shadow-sm">
           <p className="text-sm font-semibold text-zinc-700 mb-3">Nowa notatka</p>
@@ -106,25 +124,34 @@ export default function NotatkiClient({ initialNotes }: { initialNotes: Note[] }
             rows={3}
             className="w-full px-3 py-2 text-sm border border-zinc-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 resize-none mb-3"
           />
-          <div className="flex items-center gap-4 mb-3">
-            <div className="flex gap-2">
-              {Object.entries(COLORS).map(([c, s]) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setForm(p => ({ ...p, color: c }))}
-                  className={`w-6 h-6 rounded-full ${s.dot} transition-transform ${form.color === c ? 'scale-125 ring-2 ring-offset-1 ring-zinc-400' : ''}`}
-                />
-              ))}
-            </div>
-            <select
-              value={form.owner}
-              onChange={e => setForm(p => ({ ...p, owner: e.target.value }))}
-              className="px-2 py-1 text-xs border border-zinc-200 rounded-lg bg-white"
-            >
-              {Object.entries(ownerLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
+
+          {/* Właściciel — przyciski, zmiana koloru automatyczna */}
+          <div className="flex gap-2 mb-3">
+            {Object.entries(ownerLabels).map(([k, v]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => handleOwnerChange(k, 'form')}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                  form.owner === k ? ownerStyles[k] + ' border-transparent' : 'border-zinc-200 text-zinc-500 hover:bg-zinc-50'
+                }`}
+              >
+                {v}
+              </button>
+            ))}
           </div>
+
+          {/* Checkbox ważne */}
+          <label className="flex items-center gap-2 mb-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.priority}
+              onChange={e => setForm(p => ({ ...p, priority: e.target.checked }))}
+              className="w-4 h-4 accent-red-500"
+            />
+            <span className="text-sm font-medium text-red-600">🔴 Ważne (priorytet)</span>
+          </label>
+
           <div className="flex gap-2">
             <button type="submit" disabled={isPending} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50">Zapisz</button>
             <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 border border-zinc-200 rounded-lg text-sm text-zinc-600 hover:bg-zinc-50">Anuluj</button>
@@ -141,7 +168,8 @@ export default function NotatkiClient({ initialNotes }: { initialNotes: Note[] }
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {notes.map(note => {
-            const c = COLORS[note.color] || COLORS.yellow;
+            const priority = note.priority ?? false;
+            const c = priority ? PRIORITY_STYLE : (COLORS[note.color] || COLORS.yellow);
             if (editId === note.id) {
               return (
                 <form key={note.id} onSubmit={handleEditSave} className={`rounded-xl p-4 border-2 shadow-sm ${c.bg} ${c.border}`}>
@@ -157,23 +185,31 @@ export default function NotatkiClient({ initialNotes }: { initialNotes: Note[] }
                     rows={3}
                     className="w-full px-2 py-1 text-sm border border-zinc-200 rounded-lg resize-none mb-2 bg-white"
                   />
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="flex gap-2">
-                      {Object.entries(COLORS).map(([col, s]) => (
-                        <button key={col} type="button" onClick={() => setEditForm(p => ({ ...p, color: col }))}
-                          className={`w-5 h-5 rounded-full ${s.dot} ${editForm.color === col ? 'ring-2 ring-offset-1 ring-zinc-500' : ''}`}
-                          title={col === 'red' ? '🔴 Bardzo ważne' : col}
-                        />
-                      ))}
-                    </div>
-                    <select
-                      value={editForm.owner}
-                      onChange={e => setEditForm(p => ({ ...p, owner: e.target.value }))}
-                      className="px-2 py-1 text-xs border border-zinc-200 rounded-lg bg-white"
-                    >
-                      {Object.entries(ownerLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                    </select>
+                  {/* Właściciel — przyciski */}
+                  <div className="flex gap-2 mb-2">
+                    {Object.entries(ownerLabels).map(([k, v]) => (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => handleOwnerChange(k, 'edit')}
+                        className={`flex-1 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                          editForm.owner === k ? ownerStyles[k] + ' border-transparent' : 'border-zinc-200 text-zinc-500 hover:bg-zinc-50'
+                        }`}
+                      >
+                        {v}
+                      </button>
+                    ))}
                   </div>
+                  {/* Checkbox ważne */}
+                  <label className="flex items-center gap-2 mb-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editForm.priority}
+                      onChange={e => setEditForm(p => ({ ...p, priority: e.target.checked }))}
+                      className="w-4 h-4 accent-red-500"
+                    />
+                    <span className="text-xs font-medium text-red-600">🔴 Ważne (priorytet)</span>
+                  </label>
                   <div className="flex gap-1.5 text-xs">
                     <button type="submit" disabled={isPending} className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50">Zapisz</button>
                     <button type="button" onClick={() => setEditId(null)} className="px-3 py-1.5 border border-zinc-300 rounded-lg text-zinc-600 hover:bg-white/50">Anuluj</button>
@@ -183,10 +219,11 @@ export default function NotatkiClient({ initialNotes }: { initialNotes: Note[] }
               );
             }
             return (
-              <div key={note.id} className={`rounded-xl p-4 border shadow-sm ${c.bg} ${c.border} ${note.pinned ? 'border-2' : ''}`}>
+              <div key={note.id} className={`rounded-xl p-4 border shadow-sm ${c.bg} ${c.border} ${note.pinned || priority ? 'border-2' : ''}`}>
                 <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     {note.pinned && <span className="text-xs">📌</span>}
+                    {priority && <span className="text-[10px] px-1.5 py-0.5 bg-red-500 text-white rounded-full font-bold">WAŻNE</span>}
                     <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${ownerStyles[note.owner] || 'bg-zinc-100 text-zinc-600'}`}>
                       {ownerLabels[note.owner] || note.owner}
                     </span>
@@ -198,7 +235,7 @@ export default function NotatkiClient({ initialNotes }: { initialNotes: Note[] }
                     <button onClick={() => handleEditOpen(note)} className="text-zinc-400 hover:text-zinc-700 text-sm px-1">✏️</button>
                   </div>
                 </div>
-                <p className="font-semibold text-zinc-800 text-sm mb-1">{note.title}</p>
+                <p className={`font-semibold text-sm mb-1 ${priority ? 'text-red-800' : 'text-zinc-800'}`}>{note.title}</p>
                 {note.body && <p className="text-xs text-zinc-600 leading-relaxed whitespace-pre-wrap">{note.body}</p>}
                 <p className="text-[10px] text-zinc-400 mt-2">
                   {new Date(note.created_at).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })}
