@@ -21,13 +21,6 @@ const proteinColors: Record<string, string> = {
 const proteinLabels: Record<string, string> = { hi: '💪💪💪', md: '💪💪', ok: '💪', lo: '⚠️' };
 const dayLabels = ['', 'Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb', 'Nd'];
 
-const ownerStyles: Record<string, string> = {
-  adrian: 'bg-blue-100 text-blue-700',
-  kasia: 'bg-pink-100 text-pink-700',
-  oboje: 'bg-yellow-100 text-yellow-700',
-};
-const ownerLabels: Record<string, string> = { adrian: 'Adrian', kasia: 'Kasia', oboje: 'Oboje' };
-
 const MAX_ITEMS = 5;
 
 export default async function DashboardPage() {
@@ -78,7 +71,6 @@ export default async function DashboardPage() {
 
   const events = todayEvents || [];
   const visibleEvents = events.slice(0, MAX_ITEMS);
-  const moreEvents = events.length - visibleEvents.length;
 
   const visibleBills = upcomingBills.slice(0, MAX_ITEMS);
   const moreBills = upcomingBills.length - visibleBills.length;
