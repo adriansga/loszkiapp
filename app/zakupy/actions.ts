@@ -212,6 +212,7 @@ export async function generateShoppingList(weekNumber: number) {
     category: item.category || 'inne',
     list_id: listId,
     checked: false,
+    source: 'generated',
   }));
 
   if (toInsert.length > 0) {
@@ -275,7 +276,7 @@ export async function toggleItem(itemId: number) {
 export async function addItem(listId: number, name: string, quantity: string) {
   const { data } = await supabase
     .from('shopping_items')
-    .insert({ list_id: listId, name, quantity, unit: '', checked: false, category: 'inne' })
+    .insert({ list_id: listId, name, quantity, unit: '', checked: false, category: 'inne', source: 'manual' })
     .select()
     .single();
 

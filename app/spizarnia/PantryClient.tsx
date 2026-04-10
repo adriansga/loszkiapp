@@ -2,11 +2,11 @@
 
 import { useState, useTransition, useRef, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { addPantryItem, deletePantryItem, updatePantryItem } from './actions';
+import { addPantryItem, consumePantryItem, deletePantryItem, updatePantryItem } from './actions';
 
 const BarcodeScanner = dynamic(() => import('@/components/BarcodeScanner'), { ssr: false });
 
-type Item = { id: number; name: string; quantity: number; unit: string; category: string; purchase_date: string; expiry_days: number; notes: string; protein_per_100g?: number | null; fat_per_100g?: number | null; carbs_per_100g?: number | null; kcal_per_100g?: number | null };
+type Item = { id: number; name: string; quantity: number; unit: string; category: string; purchase_date: string; expiry_days: number; notes: string; protein_per_100g?: number | null; fat_per_100g?: number | null; carbs_per_100g?: number | null; kcal_per_100g?: number | null; is_consumed?: boolean; consumed_at?: string | null };
 
 const EXPIRY_DEFAULTS: Record<string, number> = {
   'kurczak': 2, 'mięso mielone': 1, 'karkówka': 2, 'wieprzowina': 2,
@@ -63,8 +63,10 @@ function ExpiryBadge({ item }: { item: Item }) {
   return <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-500">Zostało {daysLeft}d</span>;
 }
 
-export default function PantryClient({ initialItems }: { initialItems: Item[] }) {
+export default function PantryClient({ initialItems, initialConsumedItems = [] }: { initialItems: Item[]; initialConsumedItems?: Item[] }) {
   const [items, setItems] = useState(initialItems);
+  const [consumedItems] = useState(initialConsumedItems);
+  const [showHistory, setShowHistory] = useState(false);
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const firstMatchRef = useRef<HTMLDivElement>(null);
@@ -139,6 +141,14 @@ export default function PantryClient({ initialItems }: { initialItems: Item[] })
         setItems(prev => prev.map(i => i.id === editId ? result.item as Item : i));
         setEditId(null);
       }
+    });
+  }
+
+  function handleConsume(id: number) {
+    startTransition(async () => {
+      await consumePantryItem(id);
+      setItems(prev => prev.filter(i => i.id !== id));
+      setEditId(null);
     });
   }
 
@@ -417,8 +427,16 @@ export default function PantryClient({ initialItems }: { initialItems: Item[] })
                           </button>
                           <button
                             type="button"
+                            onClick={() => handleConsume(item.id)}
+                            disabled={isPending}
+                            className="ml-auto px-3 py-1.5 text-sm font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg disabled:opacity-50"
+                          >
+                            ✓ Zjedzone
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => { setEditId(null); handleDelete(item.id); }}
-                            className="ml-auto px-3 py-1.5 text-sm text-red-500 hover:text-red-700"
+                            className="px-3 py-1.5 text-sm text-red-400 hover:text-red-600"
                           >
                             Usuń
                           </button>
@@ -451,6 +469,46 @@ export default function PantryClient({ initialItems }: { initialItems: Item[] })
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Historia — zjedzone produkty */}
+      {consumedItems.length > 0 && (
+        <div className="mt-6">
+          <button
+            onClick={() => setShowHistory(h => !h)}
+            className="flex items-center gap-2 text-sm font-medium text-zinc-500 hover:text-zinc-700 mb-3"
+          >
+            <span>{showHistory ? '▾' : '▸'}</span>
+            Historia zjedzonego ({consumedItems.length})
+          </button>
+          {showHistory && (
+            <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
+              <div className="divide-y divide-zinc-100">
+                {consumedItems.map(item => {
+                  const daysToConsume = item.purchase_date && item.consumed_at
+                    ? Math.round((new Date(item.consumed_at).getTime() - new Date(item.purchase_date).getTime()) / 86400000)
+                    : null;
+                  return (
+                    <div key={item.id} className="flex items-center gap-3 px-4 py-2.5">
+                      <span className="text-sm text-zinc-500 flex-1">{item.name}</span>
+                      <span className="text-xs text-zinc-400">{item.quantity} {item.unit}</span>
+                      {daysToConsume !== null && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-400">
+                          {daysToConsume}d od zakupu
+                        </span>
+                      )}
+                      {item.consumed_at && (
+                        <span className="text-xs text-zinc-300">
+                          {new Date(item.consumed_at).toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' })}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

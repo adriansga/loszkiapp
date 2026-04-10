@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import { generateShoppingList, toggleItem, addItem, deleteList, addSweetsToList, createEmptyList } from './actions';
 import Link from 'next/link';
 
-type Item = { id: number; name: string; quantity: string; unit: string; checked: number; category: string };
+type Item = { id: number; name: string; quantity: string; unit: string; checked: number; category: string; source?: string };
 
 const categoryOrder = ['mięso', 'nabiał', 'warzywa', 'suche', 'przyprawy', 'pieczywo', 'słodycze', 'inne'];
 const categoryLabels: Record<string, string> = {
@@ -40,14 +40,24 @@ export default function ShoppingListClient({
   const checked = items.filter(i => i.checked).length;
   const total = items.length;
 
-  const grouped = categoryOrder.reduce((acc, cat) => {
-    const catItems = items.filter(i => (i.category || 'inne') === cat);
-    if (catItems.length > 0) acc[cat] = catItems;
-    return acc;
-  }, {} as Record<string, Item[]>);
+  const generatedItems = items.filter(i => !i.source || i.source === 'generated');
+  const manualItems = items.filter(i => i.source === 'manual');
 
-  const uncategorized = items.filter(i => !categoryOrder.includes(i.category || 'inne'));
-  if (uncategorized.length > 0) grouped['inne'] = [...(grouped['inne'] || []), ...uncategorized];
+  function groupByCategory(itemList: Item[]) {
+    const grouped = categoryOrder.reduce((acc, cat) => {
+      const catItems = itemList.filter(i => (i.category || 'inne') === cat);
+      if (catItems.length > 0) acc[cat] = catItems;
+      return acc;
+    }, {} as Record<string, Item[]>);
+    const uncategorized = itemList.filter(i => !categoryOrder.includes(i.category || 'inne'));
+    if (uncategorized.length > 0) grouped['inne'] = [...(grouped['inne'] || []), ...uncategorized];
+    return grouped;
+  }
+
+  const grouped = groupByCategory(items);
+  const groupedGenerated = groupByCategory(generatedItems);
+  const groupedManual = groupByCategory(manualItems);
+  const hasBothSources = generatedItems.length > 0 && manualItems.length > 0;
 
   async function handleGenerate() {
     setGenError('');
@@ -218,7 +228,10 @@ export default function ShoppingListClient({
 
           {/* Lista produktów */}
           <div className="flex flex-col gap-4 mb-4">
-            {Object.entries(grouped).map(([cat, catItems]) => (
+            {hasBothSources && (
+              <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wide px-1">Z przepisów</p>
+            )}
+            {Object.entries(hasBothSources ? groupedGenerated : grouped).map(([cat, catItems]) => (
               <div key={cat} className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
                 <div className="px-4 py-2.5 bg-zinc-50 border-b border-zinc-200">
                   <p className="text-sm font-semibold text-zinc-600">{categoryLabels[cat] || cat}</p>
@@ -248,6 +261,41 @@ export default function ShoppingListClient({
                 </div>
               </div>
             ))}
+            {hasBothSources && Object.keys(groupedManual).length > 0 && (
+              <>
+                <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wide px-1 mt-2">Dodane ręcznie</p>
+                {Object.entries(groupedManual).map(([cat, catItems]) => (
+                  <div key={`manual-${cat}`} className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
+                    <div className="px-4 py-2.5 bg-zinc-50 border-b border-zinc-200">
+                      <p className="text-sm font-semibold text-zinc-600">{categoryLabels[cat] || cat}</p>
+                    </div>
+                    <div className="divide-y divide-zinc-100">
+                      {catItems.map(item => (
+                        <label
+                          key={item.id}
+                          className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-zinc-50 transition-colors ${
+                            item.checked ? 'opacity-50' : ''
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={!!item.checked}
+                            onChange={() => handleToggle(item.id)}
+                            className="w-4 h-4 rounded accent-emerald-600"
+                          />
+                          <span className={`flex-1 text-sm ${item.checked ? 'line-through text-zinc-400' : 'text-zinc-800'}`}>
+                            {item.name}
+                          </span>
+                          {item.quantity && (
+                            <span className="text-xs text-zinc-400 shrink-0">{item.quantity}</span>
+                          )}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
 
           {/* Dodaj produkt */}

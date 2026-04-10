@@ -7,8 +7,16 @@ export default async function SpizarniaPage() {
   const { data: items } = await supabase
     .from('pantry')
     .select('*')
+    .or('is_consumed.is.null,is_consumed.eq.false')
     .order('category')
     .order('name');
 
-  return <PantryClient initialItems={items || []} />;
+  const { data: consumedItems } = await supabase
+    .from('pantry')
+    .select('*')
+    .eq('is_consumed', true)
+    .order('consumed_at', { ascending: false })
+    .limit(50);
+
+  return <PantryClient initialItems={items || []} initialConsumedItems={consumedItems || []} />;
 }

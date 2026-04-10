@@ -213,7 +213,12 @@ export default function KalendarzClient({
         </div>
         {!pushEnabled
           ? <button onClick={() => setPushOwner('adrian')} className="text-xs px-3 py-1.5 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 font-medium">🔔 Włącz powiadomienia</button>
-          : <span className="text-xs text-emerald-500 font-medium">🔔 Aktywne</span>}
+          : (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-emerald-500 font-medium">🔔 Aktywne</span>
+              <button onClick={() => setPushOwner('adrian')} className="text-xs px-2 py-1 rounded-lg bg-zinc-100 text-zinc-500 hover:bg-zinc-200">Zmień profil</button>
+            </div>
+          )}
       </div>
 
       <div className="grid grid-cols-7 mb-1">

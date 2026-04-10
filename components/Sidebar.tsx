@@ -16,6 +16,7 @@ const primaryNav = [
 ];
 
 const secondaryNav = [
+  { href: '/zadania', label: 'Zadania', icon: '✅' },
   { href: '/czat', label: 'Czat', icon: '💬' },
   { href: '/notatki', label: 'Notatki', icon: '📝' },
   { href: '/kontakty', label: 'Kontakty', icon: '📞' },

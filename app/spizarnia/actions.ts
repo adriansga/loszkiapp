@@ -50,6 +50,14 @@ export async function addPantryItem(form: PantryForm) {
   return { item: data };
 }
 
+export async function consumePantryItem(id: number) {
+  await supabase
+    .from('pantry')
+    .update({ is_consumed: true, consumed_at: new Date().toISOString() })
+    .eq('id', id);
+  revalidatePath('/spizarnia');
+}
+
 export async function deletePantryItem(id: number) {
   // Pobierz nazwę produktu przed usunięciem
   const { data: pantryItem } = await supabase
