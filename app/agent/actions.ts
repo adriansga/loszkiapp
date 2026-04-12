@@ -2,8 +2,147 @@
 
 import Groq from 'groq-sdk';
 import { supabase } from '@/lib/db';
+import { revalidatePath } from 'next/cache';
 
 type Message = { role: 'user' | 'assistant'; content: string };
+
+// ─── Narzędzia agenta (function calling) ─────────────────────────────────────
+
+const TOOLS: Groq.Chat.ChatCompletionTool[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'add_to_pantry',
+      description: 'Dodaje produkt do spiżarni. Używaj gdy użytkownik mówi że coś kupił, wgrywa paragon, lub prosi o dodanie produktu.',
+      parameters: {
+        type: 'object',
+        properties: {
+          items: {
+            type: 'array',
+            description: 'Lista produktów do dodania',
+            items: {
+              type: 'object',
+              properties: {
+                name:        { type: 'string',  description: 'Nazwa produktu np. "Mleko UHT 1L"' },
+                quantity:    { type: 'number',  description: 'Ilość, domyślnie 1' },
+                unit:        { type: 'string',  description: 'Jednostka: szt, kg, g, l, ml, op' },
+                category:    { type: 'string',  description: 'Kategoria: nabiał, mięso, warzywa, owoce, suche, napoje, słodycze, przyprawy, inne' },
+                expiry_days: { type: 'number',  description: 'Dni do przeterminowania. Przykłady: mleko=7, jogurt=14, mięso=2, kurczak=2, makaron=730, ryż=730, chleb=5, ser=14, śmietana=7, jajka=21, warzywa=5, owoce=7' },
+              },
+              required: ['name', 'quantity', 'unit', 'category', 'expiry_days'],
+            },
+          },
+        },
+        required: ['items'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'remove_from_pantry',
+      description: 'Usuwa produkt ze spiżarni. Używaj gdy użytkownik mówi że coś zużył, zjadł lub wyrzucił.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Nazwa produktu do usunięcia (przybliżona)' },
+        },
+        required: ['name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'add_calendar_event',
+      description: 'Dodaje wydarzenie do kalendarza. Używaj gdy użytkownik prosi o wpisanie czegoś do kalendarza.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string',  description: 'Tytuł wydarzenia' },
+          date:  { type: 'string',  description: 'Data w formacie YYYY-MM-DD' },
+          time:  { type: 'string',  description: 'Godzina w formacie HH:MM, opcjonalna' },
+          owner: { type: 'string',  description: 'Kto: adrian, kasia, oboje' },
+          notes: { type: 'string',  description: 'Dodatkowe notatki, opcjonalne' },
+        },
+        required: ['title', 'date', 'owner'],
+      },
+    },
+  },
+];
+
+// ─── Wykonanie narzędzi ───────────────────────────────────────────────────────
+
+async function executeTool(name: string, args: Record<string, unknown>): Promise<string> {
+  if (name === 'add_to_pantry') {
+    const items = args.items as Array<{
+      name: string; quantity: number; unit: string; category: string; expiry_days: number;
+    }>;
+    const today = new Date().toISOString().split('T')[0];
+    const results: string[] = [];
+
+    for (const item of items) {
+      const { data: existing } = await supabase
+        .from('pantry')
+        .select('id, quantity')
+        .ilike('name', item.name.trim())
+        .maybeSingle();
+
+      if (existing) {
+        await supabase
+          .from('pantry')
+          .update({ quantity: existing.quantity + item.quantity })
+          .eq('id', existing.id);
+        results.push(`Zaktualizowano: ${item.name} (ilość +${item.quantity})`);
+      } else {
+        await supabase.from('pantry').insert({
+          name: item.name,
+          quantity: item.quantity,
+          unit: item.unit,
+          category: item.category,
+          purchase_date: today,
+          expiry_days: item.expiry_days,
+        });
+        results.push(`Dodano: ${item.name} (${item.quantity} ${item.unit}, ważne ${item.expiry_days} dni)`);
+      }
+    }
+
+    revalidatePath('/spizarnia');
+    return results.join('\n');
+  }
+
+  if (name === 'remove_from_pantry') {
+    const itemName = args.name as string;
+    const { data } = await supabase
+      .from('pantry')
+      .select('id, name')
+      .ilike('name', `%${itemName}%`)
+      .limit(1)
+      .maybeSingle();
+
+    if (!data) return `Nie znaleziono "${itemName}" w spiżarni.`;
+    await supabase.from('pantry').delete().eq('id', data.id);
+    revalidatePath('/spizarnia');
+    return `Usunięto ze spiżarni: ${data.name}`;
+  }
+
+  if (name === 'add_calendar_event') {
+    const { error } = await supabase.from('calendar_events').insert({
+      title: args.title,
+      date: args.date,
+      time: args.time ?? null,
+      owner: args.owner,
+      notes: args.notes ?? null,
+    });
+    revalidatePath('/kalendarz');
+    if (error) return `Błąd kalendarza: ${error.message}`;
+    return `Dodano do kalendarza: ${args.title} (${args.date}${args.time ? ' ' + args.time : ''}, ${args.owner})`;
+  }
+
+  return `Nieznane narzędzie: ${name}`;
+}
+
+// ─── Kontekst ─────────────────────────────────────────────────────────────────
 
 async function getContext() {
   const today = new Date();
@@ -20,7 +159,6 @@ async function getContext() {
   const planText = weekMealsRes.data?.map(m => `${days[m.day_of_week]}: ${m.meal_name}`).join(', ') || 'brak planu';
   const billsText = billsRes.data?.map(b => `${b.name} ${b.amount}zł/${b.due_day}.`).join(', ') || 'brak';
 
-  // Spiżarnia z terminami ważności
   const pantryWithExpiry = (pantryRes.data || []).map(p => {
     const purchaseDate = new Date(p.purchase_date);
     const expiryDate = new Date(purchaseDate.getTime() + p.expiry_days * 86400000);
@@ -28,84 +166,133 @@ async function getContext() {
     return { ...p, daysLeft };
   });
 
-  const expired = pantryWithExpiry.filter(p => p.daysLeft < 0);
+  const expired      = pantryWithExpiry.filter(p => p.daysLeft < 0);
   const expiringSoon = pantryWithExpiry.filter(p => p.daysLeft >= 0 && p.daysLeft <= 3);
-  const ok = pantryWithExpiry.filter(p => p.daysLeft > 3);
+  const ok           = pantryWithExpiry.filter(p => p.daysLeft > 3);
 
   const pantryText = [
-    expiringSoon.length > 0
-      ? `⚠️ KOŃCZĄ SIĘ (użyj ASAP): ${expiringSoon.map(p => `${p.name} (${p.quantity} ${p.unit}, zostało ${p.daysLeft} dni)`).join('; ')}`
-      : null,
-    expired.length > 0
-      ? `❌ PRZETERMINOWANE: ${expired.map(p => p.name).join(', ')}`
-      : null,
-    ok.length > 0
-      ? `✅ OK: ${ok.map(p => `${p.name} (${p.quantity} ${p.unit})`).join(', ')}`
-      : null,
+    expiringSoon.length > 0 ? `⚠️ KOŃCZĄ SIĘ: ${expiringSoon.map(p => `${p.name} (${p.quantity} ${p.unit}, ${p.daysLeft} dni)`).join('; ')}` : null,
+    expired.length > 0      ? `❌ PRZETERMINOWANE: ${expired.map(p => p.name).join(', ')}` : null,
+    ok.length > 0           ? `✅ OK: ${ok.map(p => `${p.name} (${p.quantity} ${p.unit})`).join(', ')}` : null,
   ].filter(Boolean).join('\n') || 'spiżarnia pusta';
 
-  const recipesText = (mealsRes.data || [])
-    .map(m => `[${m.name}] składniki: ${m.ingredients}`)
-    .join('\n');
+  const recipesText = (mealsRes.data || []).map(m => `[${m.name}] składniki: ${m.ingredients}`).join('\n');
 
-  return `PROFIL: Adrian (cel 150-160g białka/dzień, shake ~47g/dzień), Kasia (cel 75-100g/dzień). Zakupy: soboty. Budżet jedzenie: 220zł/mies.
+  return `PROFIL: Adrian (cel 150-160g białka/dzień, shake ~47g/dzień), Kasia (cel 75-100g/dzień). Zakupy: soboty. Budżet: 220zł/mies.
 DATA: ${today.toLocaleDateString('pl-PL')}
-
 PLAN TYGODNIA (tydzień ${weekNum}): ${planText}
-
-SPIŻARNIA:
-${pantryText}
-
+SPIŻARNIA:\n${pantryText}
 RACHUNKI: ${billsText}
-
-BAZA PRZEPISÓW (${mealsRes.data?.length || 0} dań):
-${recipesText}`;
+BAZA PRZEPISÓW (${mealsRes.data?.length || 0} dań):\n${recipesText}`;
 }
+
+// ─── Analiza obrazu przez model vision ───────────────────────────────────────
+
+async function analyzeImage(client: Groq, imageBase64: string, imageMime: string): Promise<string> {
+  const response = await client.chat.completions.create({
+    model: 'llama-3.2-11b-vision-preview',
+    max_tokens: 1024,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'image_url', image_url: { url: `data:${imageMime};base64,${imageBase64}` } },
+        { type: 'text', text: 'Opisz dokładnie co widzisz na tym obrazie. Jeśli to paragon — wypisz wszystkie produkty spożywcze z ilościami i cenami. Jeśli to coś innego — opisz co to jest.' },
+      ],
+    }],
+  });
+  return response.choices[0]?.message?.content ?? 'Nie udało się przeanalizować obrazu.';
+}
+
+// ─── Główna funkcja ───────────────────────────────────────────────────────────
 
 export async function sendMessage(messages: Message[], imageBase64?: string, imageMime?: string): Promise<string> {
   const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) {
-    return 'Brak klucza GROQ_API_KEY. Dodaj go w ustawieniach Vercel → Environment Variables.';
-  }
+  if (!apiKey) return 'Brak klucza GROQ_API_KEY.';
 
   const context = await getContext();
   const client = new Groq({ apiKey });
 
-  const systemPrompt = `Jesteś Agentem Loszki — inteligentnym asystentem domowym Adriana i Kasi.
-Odpowiadasz po polsku, krótko i konkretnie.
+  const systemPrompt = `Jesteś Agentem Loszki — inteligentnym asystentem domowym Adriana i Kasi. Odpowiadasz po polsku, krótko i konkretnie.
 
-TWOJE GŁÓWNE ZADANIA:
-1. Gdy pytają co ugotować — sprawdź spiżarnię, priorytetyzuj produkty z krótkim terminem ważności, dopasuj przepisy z bazy do dostępnych składników
-2. Gdy analizujesz paragon — wypisz produkty jako listę: "- Nazwa (ilość, cena)"
-3. Gdy pytają o zakupy — uwzględnij plan tygodnia i czego brakuje w spiżarni
-4. Gdy pytają o białko — policz na podstawie przepisów i celów Adriana/Kasi
+MOŻESZ:
+- Dodawać i usuwać produkty ze spiżarni (używaj narzędzi!)
+- Dodawać wydarzenia do kalendarza (używaj narzędzi!)
+- Gdy użytkownik wysyła paragon — AUTOMATYCZNIE dodaj produkty spożywcze do spiżarni
+- Doradzać co ugotować bazując na spiżarni i terminach ważności
+- Odpowiadać na pytania o budżet, rachunki, plan tygodnia
 
-ZASADA: zawsze sprawdzaj najpierw co się kończy w spiżarni i buduj propozycję wokół tych produktów.
+ZASADA: gdy możesz coś zrobić (dodać, usunąć, zapisać) — ZRÓB TO przez narzędzie, nie tylko mów że możesz.
 
 AKTUALNY KONTEKST:
 ${context}`;
 
-  const groqMessages: Groq.Chat.ChatCompletionMessageParam[] = [
-    { role: 'system', content: systemPrompt },
-    ...messages.slice(-10).map(m => ({
-      role: m.role as 'user' | 'assistant',
-      content: m.content,
-    })),
-  ];
-
-  // Groq nie obsługuje obrazów w llama — jeśli jest obraz, dodaj info tekstowo
+  // Jeśli obraz — najpierw analizuj przez vision model
+  let imageDescription = '';
   if (imageBase64 && imageMime) {
-    const last = groqMessages[groqMessages.length - 1];
-    last.content = `[Użytkownik wysłał zdjęcie paragonu]\n${last.content}`;
+    try {
+      imageDescription = await analyzeImage(client, imageBase64, imageMime);
+    } catch {
+      imageDescription = '[Nie udało się przeanalizować obrazu]';
+    }
   }
 
+  // Buduj historię wiadomości
+  const groqMessages: Groq.Chat.ChatCompletionMessageParam[] = [
+    { role: 'system', content: systemPrompt },
+    ...messages.slice(-10).map((m, i) => {
+      const isLast = i === Math.min(messages.length, 10) - 1;
+      if (isLast && imageDescription) {
+        return {
+          role: m.role as 'user' | 'assistant',
+          content: `${m.content}\n\n[OBRAZ - opis]: ${imageDescription}`,
+        };
+      }
+      return { role: m.role as 'user' | 'assistant', content: m.content };
+    }),
+  ];
+
   try {
+    // Pierwsza odpowiedź — model może wywołać narzędzia
     const response = await client.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
       messages: groqMessages,
+      tools: TOOLS,
+      tool_choice: 'auto',
       max_tokens: 1024,
     });
-    return response.choices[0]?.message?.content ?? '';
+
+    const choice = response.choices[0];
+
+    // Jeśli model chce wywołać narzędzia
+    if (choice.finish_reason === 'tool_calls' && choice.message.tool_calls) {
+      const toolResults: string[] = [];
+
+      for (const toolCall of choice.message.tool_calls) {
+        const args = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
+        const result = await executeTool(toolCall.function.name, args);
+        toolResults.push(result);
+      }
+
+      // Druga runda — model podsumowuje co zrobił
+      const followUp = await client.chat.completions.create({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          ...groqMessages,
+          { role: 'assistant', content: choice.message.content ?? '', tool_calls: choice.message.tool_calls },
+          ...choice.message.tool_calls.map((tc, i) => ({
+            role: 'tool' as const,
+            tool_call_id: tc.id,
+            content: toolResults[i],
+          })),
+        ],
+        max_tokens: 512,
+      });
+
+      return followUp.choices[0]?.message?.content ?? toolResults.join('\n');
+    }
+
+    return choice.message.content ?? '';
+
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes('429') || msg.includes('rate_limit')) {
