@@ -18,7 +18,6 @@ const QUICK_QUESTIONS = [
 export default function AgentClient() {
   const WELCOME: Message = { role: 'assistant', content: 'Cześć! Jestem Agentem Loszki. Znam Wasz plan obiadów, spiżarnię, budżet i rachunki. Możesz też wysłać mi zdjęcie paragonu — przeanalizuję co kupiłeś! 🏠' };
   const [messages, setMessages] = useState<Message[]>([WELCOME]);
-  const [historyLoaded, setHistoryLoaded] = useState(false);
   const [input, setInput] = useState('');
   const [isPending, startTransition] = useTransition();
   const [pendingImage, setPendingImage] = useState<{ base64: string; mime: string; preview: string } | null>(null);
@@ -37,7 +36,6 @@ export default function AgentClient() {
   useEffect(() => {
     getChatHistory().then(history => {
       if (history.length > 0) setMessages(history);
-      setHistoryLoaded(true);
     });
   }, []);
 
