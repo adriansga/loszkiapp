@@ -16,12 +16,13 @@ const QUICK_QUESTIONS = [
 ];
 
 export default function AgentClient() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: 'assistant',
-      content: 'Cześć! Jestem Agentem Loszki. Znam Wasz plan obiadów, spiżarnię, budżet i rachunki. Możesz też wysłać mi zdjęcie paragonu — przeanalizuję co kupiłeś! 🏠',
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    if (typeof window === 'undefined') return [{ role: 'assistant', content: 'Cześć! Jestem Agentem Loszki. Znam Wasz plan obiadów, spiżarnię, budżet i rachunki. Możesz też wysłać mi zdjęcie paragonu — przeanalizuję co kupiłeś! 🏠' }];
+    try {
+      const saved = localStorage.getItem('agent-chat-history');
+      return saved ? JSON.parse(saved) : [{ role: 'assistant', content: 'Cześć! Jestem Agentem Loszki. Znam Wasz plan obiadów, spiżarnię, budżet i rachunki. Możesz też wysłać mi zdjęcie paragonu — przeanalizuję co kupiłeś! 🏠' }];
+    } catch { return [{ role: 'assistant', content: 'Cześć! Jestem Agentem Loszki. Znam Wasz plan obiadów, spiżarnię, budżet i rachunki. Możesz też wysłać mi zdjęcie paragonu — przeanalizuję co kupiłeś! 🏠' }]; }
+  });
   const [input, setInput] = useState('');
   const [isPending, startTransition] = useTransition();
   const [pendingImage, setPendingImage] = useState<{ base64: string; mime: string; preview: string } | null>(null);
@@ -35,6 +36,16 @@ export default function AgentClient() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    try { localStorage.setItem('agent-chat-history', JSON.stringify(messages.slice(-100))); } catch {}
+  }, [messages]);
+
+  function clearHistory() {
+    const fresh = [{ role: 'assistant' as const, content: 'Cześć! Jestem Agentem Loszki. Znam Wasz plan obiadów, spiżarnię, budżet i rachunki. Możesz też wysłać mi zdjęcie paragonu — przeanalizuję co kupiłeś! 🏠' }];
+    setMessages(fresh);
+    localStorage.removeItem('agent-chat-history');
+  }
 
   function compressImage(file: File, maxPx = 1280, quality = 0.75): Promise<{ base64: string; mime: string; preview: string }> {
     return new Promise((resolve, reject) => {
@@ -125,9 +136,14 @@ export default function AgentClient() {
 
   return (
     <div className="flex flex-col h-screen">
-      <div className="px-6 py-4 border-b border-zinc-200 bg-white">
-        <h1 className="text-xl font-bold text-zinc-800">🤖 Agent Loszki</h1>
-        <p className="text-xs text-zinc-400 mt-0.5">Plan obiadów · spiżarnia · budżet · rachunki · analiza paragonów</p>
+      <div className="px-6 py-4 border-b border-zinc-200 bg-white flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-zinc-800">🤖 Agent Loszki</h1>
+          <p className="text-xs text-zinc-400 mt-0.5">Plan obiadów · spiżarnia · budżet · rachunki · analiza paragonów</p>
+        </div>
+        <button onClick={clearHistory} className="text-xs text-zinc-400 hover:text-red-500 transition-colors" title="Wyczyść historię">
+          🗑️ Wyczyść
+        </button>
       </div>
 
       {/* Quick questions */}
