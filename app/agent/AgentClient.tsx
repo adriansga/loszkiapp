@@ -25,9 +25,12 @@ export default function AgentClient() {
   const [input, setInput] = useState('');
   const [isPending, startTransition] = useTransition();
   const [pendingImage, setPendingImage] = useState<{ base64: string; mime: string; preview: string } | null>(null);
+  const [pendingFile, setPendingFile] = useState<{ base64: string; mime: string; name: string } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
+  const scanRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const pdfRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -69,22 +72,46 @@ export default function AgentClient() {
     }
   }
 
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const [meta, base64] = dataUrl.split(',');
+      const mime = meta.match(/:(.*?);/)?.[1] || 'application/octet-stream';
+      setPendingFile({ base64, mime, name: file.name });
+      setPendingImage(null);
+      setInput(prev => prev || `Przeanalizuj ten plik: ${file.name}`);
+    };
+    reader.readAsDataURL(file);
+  }
+
   function handleSend(text?: string) {
     const msg = (text || input).trim();
-    if (!msg && !pendingImage) return;
+    if (!msg && !pendingImage && !pendingFile) return;
     setInput('');
 
-    const displayMsg = pendingImage ? `📸 ${msg || 'Zdjęcie paragonu'}` : msg;
+    let displayMsg = msg;
+    if (pendingImage) displayMsg = `📸 ${msg || 'Zdjęcie'}`;
+    if (pendingFile) displayMsg = `📄 ${msg || pendingFile.name}`;
+
     const newMessages: Message[] = [...messages, { role: 'user', content: displayMsg }];
     setMessages(newMessages);
 
     const img = pendingImage;
+    const file = pendingFile;
     setPendingImage(null);
+    setPendingFile(null);
+
+    // Który załącznik idzie do API? Plik ma priorytet nad zdjęciem
+    const attachBase64 = file?.base64 ?? img?.base64;
+    const attachMime   = file?.mime   ?? img?.mime;
 
     startTransition(async () => {
-      // Ostatnią wiadomość z oryginalnym tekstem (bez emoji) przekazujemy do API
-      const apiMessages = [...messages, { role: 'user' as const, content: msg || 'Przeanalizuj ten paragon i wypisz produkty' }];
-      const response = await sendMessage(apiMessages.slice(-10), img?.base64, img?.mime);
+      const apiMessages = [...messages, { role: 'user' as const, content: msg || displayMsg }];
+      const response = await sendMessage(apiMessages.slice(-10), attachBase64, attachMime);
       setMessages(prev => [...prev, { role: 'assistant', content: response }]);
     });
   }
@@ -145,14 +172,25 @@ export default function AgentClient() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Podgląd wybranego zdjęcia */}
+      {/* Podgląd zdjęcia */}
       {pendingImage && (
         <div className="px-6 pb-2">
           <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={pendingImage.preview} alt="paragon" className="w-12 h-12 object-cover rounded-lg" />
+            <img src={pendingImage.preview} alt="podgląd" className="w-12 h-12 object-cover rounded-lg" />
             <p className="text-sm text-emerald-700 flex-1">Zdjęcie gotowe do wysłania</p>
             <button onClick={() => setPendingImage(null)} className="text-zinc-400 hover:text-zinc-700 text-lg">✕</button>
+          </div>
+        </div>
+      )}
+
+      {/* Podgląd pliku PDF/doc */}
+      {pendingFile && (
+        <div className="px-6 pb-2">
+          <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-3 py-2">
+            <span className="text-2xl">📄</span>
+            <p className="text-sm text-blue-700 flex-1 truncate">{pendingFile.name}</p>
+            <button onClick={() => setPendingFile(null)} className="text-zinc-400 hover:text-zinc-700 text-lg">✕</button>
           </div>
         </div>
       )}
@@ -160,10 +198,14 @@ export default function AgentClient() {
       {/* Input */}
       <div className="px-6 py-4 border-t border-zinc-200 bg-white">
         <div className="flex gap-2">
-          {/* Aparat — otwiera kamerę na mobile */}
+          {/* Aparat — otwiera kamerę */}
           <input type="file" ref={cameraRef} accept="image/*" capture="environment" onChange={handleImageChange} className="hidden" />
+          {/* Skan dokumentu — kamera w trybie skanowania (iOS/Android) */}
+          <input type="file" ref={scanRef} accept="image/*" capture="environment" onChange={handleImageChange} className="hidden" />
           {/* Galeria — wybierz zdjęcie z dysku/galerii */}
           <input type="file" ref={fileRef} accept="image/*" onChange={handleImageChange} className="hidden" />
+          {/* Pliki — PDF, DOC, TXT */}
+          <input type="file" ref={pdfRef} accept=".pdf,.doc,.docx,.txt" onChange={handleFileChange} className="hidden" />
           <button
             onClick={() => cameraRef.current?.click()}
             disabled={isPending}
@@ -173,12 +215,28 @@ export default function AgentClient() {
             📷
           </button>
           <button
+            onClick={() => scanRef.current?.click()}
+            disabled={isPending}
+            className="px-3 py-2.5 border border-zinc-200 rounded-xl text-zinc-500 hover:text-zinc-800 hover:border-zinc-400 transition-colors disabled:opacity-50"
+            title="Skanuj dokument"
+          >
+            🔍
+          </button>
+          <button
             onClick={() => fileRef.current?.click()}
             disabled={isPending}
             className="px-3 py-2.5 border border-zinc-200 rounded-xl text-zinc-500 hover:text-zinc-800 hover:border-zinc-400 transition-colors disabled:opacity-50"
             title="Wybierz zdjęcie z galerii"
           >
             🖼️
+          </button>
+          <button
+            onClick={() => pdfRef.current?.click()}
+            disabled={isPending}
+            className="px-3 py-2.5 border border-zinc-200 rounded-xl text-zinc-500 hover:text-zinc-800 hover:border-zinc-400 transition-colors disabled:opacity-50"
+            title="Wgraj PDF lub dokument"
+          >
+            📄
           </button>
           <textarea
             value={input}
@@ -190,7 +248,7 @@ export default function AgentClient() {
           />
           <button
             onClick={() => handleSend()}
-            disabled={isPending || (!input.trim() && !pendingImage)}
+            disabled={isPending || (!input.trim() && !pendingImage && !pendingFile)}
             className="px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors"
           >
             Wyślij

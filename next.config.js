@@ -35,7 +35,7 @@ const withPWA = require('next-pwa')({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   turbopack: {},
-  serverExternalPackages: ['@google/genai'],
+  serverExternalPackages: ['@google/genai', 'pdf-parse'],
   async headers() {
     return [
       {

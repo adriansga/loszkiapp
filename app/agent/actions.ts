@@ -1,6 +1,7 @@
 'use server';
 
 import Groq from 'groq-sdk';
+import pdfParse from 'pdf-parse';
 import { supabase } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 
@@ -233,6 +234,16 @@ async function analyzeImage(client: Groq, imageBase64: string, imageMime: string
   return response.choices[0]?.message?.content ?? 'Nie udało się przeanalizować obrazu.';
 }
 
+// ─── Analiza PDF ─────────────────────────────────────────────────────────────
+
+async function parsePDF(pdfBase64: string): Promise<string> {
+  const buffer = Buffer.from(pdfBase64, 'base64');
+  const data = await pdfParse(buffer);
+  const text = data.text?.trim();
+  if (!text) return '[PDF nie zawiera tekstu — może być zeskanowany obrazem]';
+  return `[TREŚĆ PDF]:\n${text.slice(0, 3000)}`;
+}
+
 // ─── Główna funkcja ───────────────────────────────────────────────────────────
 
 export async function sendMessage(messages: Message[], imageBase64?: string, imageMime?: string): Promise<string> {
@@ -262,13 +273,17 @@ GDY UŻYTKOWNIK WYSYŁA ZDJĘCIE PARAGONU:
 AKTUALNY KONTEKST:
 ${context}`;
 
-  // Jeśli obraz — najpierw analizuj przez vision model
+  // Jeśli załącznik — analizuj: PDF przez text parser, obraz przez vision model
   let imageDescription = '';
   if (imageBase64 && imageMime) {
     try {
-      imageDescription = await analyzeImage(client, imageBase64, imageMime);
-    } catch {
-      imageDescription = '[Nie udało się przeanalizować obrazu]';
+      if (imageMime === 'application/pdf') {
+        imageDescription = await parsePDF(imageBase64);
+      } else {
+        imageDescription = await analyzeImage(client, imageBase64, imageMime);
+      }
+    } catch (e) {
+      imageDescription = `[Nie udało się odczytać pliku: ${e instanceof Error ? e.message : String(e)}]`;
     }
   }
 
