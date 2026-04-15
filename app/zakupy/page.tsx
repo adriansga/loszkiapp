@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import ShoppingListClient from './ShoppingListClient';
 
 export const dynamic = 'force-dynamic';
@@ -14,6 +14,7 @@ export default async function ZakupyPage({
 }: {
   searchParams: Promise<{ week?: string }>;
 }) {
+  const supabase = await getDb();
   const params = await searchParams;
   const today = new Date();
   const currentWeek = getWeekNumber(today);

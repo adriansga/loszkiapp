@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/db';
+import { getDb } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +27,7 @@ function getMonthRange(offset = 0) {
 }
 
 export default async function StatystykiPage() {
+  const supabase = await getDb();
   const months = [0, 1, 2, 3, 4, 5].map(getMonthRange);
 
   const [{ data: allExpenses }, { data: bills }, { data: pantry }] = await Promise.all([

@@ -1,6 +1,6 @@
 'use server';
 
-import { supabase } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { sendPushToAll } from '@/lib/push';
 
@@ -14,6 +14,7 @@ type ExpenseForm = {
 };
 
 export async function addExpense(form: ExpenseForm) {
+  const supabase = await getDb();
   const { data } = await supabase
     .from('expenses')
     .insert({
@@ -31,6 +32,7 @@ export async function addExpense(form: ExpenseForm) {
 }
 
 export async function updateExpense(id: number, form: ExpenseForm) {
+  const supabase = await getDb();
   const { data } = await supabase
     .from('expenses')
     .update({
@@ -49,6 +51,7 @@ export async function updateExpense(id: number, form: ExpenseForm) {
 }
 
 export async function deleteExpense(id: number) {
+  const supabase = await getDb();
   await supabase.from('expenses').delete().eq('id', id);
   revalidatePath('/budzet');
 }
@@ -62,6 +65,7 @@ type BillForm = {
 };
 
 export async function addBill(form: BillForm) {
+  const supabase = await getDb();
   const { data } = await supabase
     .from('bills')
     .insert({
@@ -78,6 +82,7 @@ export async function addBill(form: BillForm) {
 }
 
 export async function updateBill(id: number, form: BillForm) {
+  const supabase = await getDb();
   const { data } = await supabase
     .from('bills')
     .update({
@@ -94,6 +99,7 @@ export async function updateBill(id: number, form: BillForm) {
 }
 
 export async function toggleBillPaid(id: number, currentMonth: string) {
+  const supabase = await getDb();
   const { data: bill } = await supabase.from('bills').select('name, last_paid_month').eq('id', id).single();
   const billData = bill as { name: string; last_paid_month?: string } | null;
   const newMonth = billData?.last_paid_month === currentMonth ? null : currentMonth;
@@ -106,6 +112,7 @@ export async function toggleBillPaid(id: number, currentMonth: string) {
 }
 
 export async function deleteBill(id: number) {
+  const supabase = await getDb();
   await supabase.from('bills').delete().eq('id', id);
   revalidatePath('/budzet');
 }

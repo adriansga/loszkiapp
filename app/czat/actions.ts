@@ -1,13 +1,15 @@
 'use server';
-import { supabase } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import { sendPushToOwner } from '@/lib/push';
 
 export async function getMessages() {
+  const supabase = await getDb();
   const { data } = await supabase.from('messages').select('*').order('created_at', { ascending: true }).limit(100);
   return data || [];
 }
 
 export async function sendChatMessage(owner: string, text: string) {
+  const supabase = await getDb();
   const { data } = await supabase.from('messages').insert({ owner, text }).select().single();
 
   // Push do drugiej osoby

@@ -1,9 +1,10 @@
-import { supabase } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import PantryClient from './PantryClient';
 
 export const dynamic = 'force-dynamic';
 
 export default async function SpizarniaPage() {
+  const supabase = await getDb();
   const { data: items } = await supabase
     .from('pantry')
     .select('*')

@@ -2,7 +2,7 @@
 
 import Groq from 'groq-sdk';
 import pdfParse from 'pdf-parse';
-import { supabase } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 
 type Message = { role: 'user' | 'assistant'; content: string };
@@ -247,6 +247,7 @@ async function parsePDF(pdfBase64: string): Promise<string> {
 // ─── Główna funkcja ───────────────────────────────────────────────────────────
 
 export async function sendMessage(messages: Message[], imageBase64?: string, imageMime?: string): Promise<string> {
+  const supabase = await getDb();
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return 'Brak klucza GROQ_API_KEY.';
 
@@ -366,6 +367,7 @@ ${context}`;
 // ─── Historia chatu (Supabase sync) ──────────────────────────────────────────
 
 export async function getChatHistory(): Promise<Message[]> {
+  const supabase = await getDb();
   const { data, error } = await supabase
     .from('agent_chat')
     .select('role, content')
@@ -376,6 +378,7 @@ export async function getChatHistory(): Promise<Message[]> {
 }
 
 export async function saveChatMessages(msgs: Message[]): Promise<void> {
+  const supabase = await getDb();
   if (!msgs.length) return;
   await supabase.from('agent_chat').insert(
     msgs.map(m => ({ role: m.role, content: m.content }))
@@ -383,5 +386,6 @@ export async function saveChatMessages(msgs: Message[]): Promise<void> {
 }
 
 export async function clearChatHistory(): Promise<void> {
+  const supabase = await getDb();
   await supabase.from('agent_chat').delete().neq('id', '00000000-0000-0000-0000-000000000000');
 }

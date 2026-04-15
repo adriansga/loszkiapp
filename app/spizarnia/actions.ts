@@ -1,12 +1,13 @@
 'use server';
 
-import { supabase } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { sendPushToAll } from '@/lib/push';
 
 type PantryForm = { name: string; quantity: string; unit: string; category: string; purchase_date: string; expiry_days: string; protein_per_100g?: number | null; fat_per_100g?: number | null; carbs_per_100g?: number | null; kcal_per_100g?: number | null };
 
 export async function addPantryItem(form: PantryForm) {
+  const supabase = await getDb();
   const newQty = parseFloat(form.quantity) || 1;
 
   // Deduplikacja — jeśli produkt o tej samej nazwie już istnieje, sumuj ilość
@@ -51,6 +52,7 @@ export async function addPantryItem(form: PantryForm) {
 }
 
 export async function consumePantryItem(id: number) {
+  const supabase = await getDb();
   await supabase
     .from('pantry')
     .update({ is_consumed: true, consumed_at: new Date().toISOString() })
@@ -59,6 +61,7 @@ export async function consumePantryItem(id: number) {
 }
 
 export async function deletePantryItem(id: number) {
+  const supabase = await getDb();
   // Pobierz nazwę produktu przed usunięciem
   const { data: pantryItem } = await supabase
     .from('pantry')
@@ -89,11 +92,13 @@ export async function deletePantryItem(id: number) {
 }
 
 export async function updatePantryQuantity(id: number, quantity: number) {
+  const supabase = await getDb();
   await supabase.from('pantry').update({ quantity }).eq('id', id);
   revalidatePath('/spizarnia');
 }
 
 export async function updatePantryItem(id: number, form: Partial<PantryForm>) {
+  const supabase = await getDb();
   await supabase.from('pantry').update({
     ...(form.name !== undefined && { name: form.name }),
     ...(form.quantity !== undefined && { quantity: parseFloat(form.quantity) || 0 }),

@@ -1,6 +1,6 @@
 'use server';
 
-import { supabase } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import { sendPushToAll } from '@/lib/push';
 // revalidatePath removed — strona ma force-dynamic, niepotrzebne i crashuje w Next.js 15
 
@@ -88,6 +88,7 @@ function detectShoppingCategory(name: string): string {
 }
 
 export async function generateShoppingList(weekNumber: number) {
+  const supabase = await getDb();
   try {
   // Zwróć istniejącą listę jeśli jest
   const { data: existing } = await supabase
@@ -237,6 +238,7 @@ export async function generateShoppingList(weekNumber: number) {
 }
 
 export async function toggleItem(itemId: number) {
+  const supabase = await getDb();
   const { data: item } = await supabase
     .from('shopping_items')
     .select('checked, name, quantity, category')
@@ -274,6 +276,7 @@ export async function toggleItem(itemId: number) {
 }
 
 export async function addItem(listId: number, name: string, quantity: string) {
+  const supabase = await getDb();
   const { data } = await supabase
     .from('shopping_items')
     .insert({ list_id: listId, name, quantity, unit: '', checked: false, category: 'inne', source: 'manual' })
@@ -287,6 +290,7 @@ export async function addItem(listId: number, name: string, quantity: string) {
 }
 
 export async function addSweetsToList(listId: number) {
+  const supabase = await getDb();
   const { data: pantry } = await supabase.from('pantry').select('name').eq('category', 'słodycze');
   const pantryNames = (pantry || []).map((p: { name: string }) => p.name.toLowerCase());
   const toAdd = SWEETS_LIST
@@ -300,6 +304,7 @@ export async function addSweetsToList(listId: number) {
 }
 
 export async function createEmptyList(weekNumber: number) {
+  const supabase = await getDb();
   // Sprawdź czy już istnieje
   const { data: existing } = await supabase
     .from('shopping_lists')
@@ -320,6 +325,7 @@ export async function createEmptyList(weekNumber: number) {
 }
 
 export async function deleteList(listId: number) {
+  const supabase = await getDb();
   await supabase.from('shopping_items').delete().eq('list_id', listId);
   await supabase.from('shopping_lists').delete().eq('id', listId);
 

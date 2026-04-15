@@ -1,6 +1,6 @@
 'use server';
 
-import { supabase } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { sendPushToAll, OWNER_LABELS } from '@/lib/push';
 
@@ -12,6 +12,7 @@ export async function addEvent(form: {
   notes?: string;
   reminders?: number[]; // offset_minutes
 }) {
+  const supabase = await getDb();
   const { data: event } = await supabase
     .from('calendar_events')
     .insert({ title: form.title, date: form.date, time: form.time || null, owner: form.owner, notes: form.notes || null })
@@ -39,6 +40,7 @@ export async function updateEvent(id: string, form: {
   notes?: string;
   reminders?: number[];
 }) {
+  const supabase = await getDb();
   await supabase.from('calendar_events').update({
     title: form.title,
     date: form.date,
@@ -59,11 +61,13 @@ export async function updateEvent(id: string, form: {
 }
 
 export async function deleteEvent(id: string) {
+  const supabase = await getDb();
   await supabase.from('calendar_events').delete().eq('id', id);
   revalidatePath('/kalendarz');
 }
 
 export async function toggleEventDone(id: string, currentDone: boolean) {
+  const supabase = await getDb();
   const newDone = !currentDone;
   await supabase.from('calendar_events').update({
     is_done: newDone,

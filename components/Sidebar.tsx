@@ -22,6 +22,8 @@ const secondaryNav = [
   { href: '/kontakty', label: 'Kontakty', icon: '📞' },
   { href: '/planowane', label: 'Planowane', icon: '🛍️' },
   { href: '/statystyki', label: 'Statystyki', icon: '📊' },
+  { href: '/ustawienia', label: 'Ustawienia', icon: '⚙️' },
+  { href: '/admin', label: 'Admin', icon: '🛡️' },
 ];
 
 const mobileNav = primaryNav;
@@ -30,6 +32,11 @@ export default function Sidebar() {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Nie pokazuj sidebara na stronach publicznych (login/invite/auth)
+  if (pathname === '/login' || pathname?.startsWith('/invite') || pathname?.startsWith('/auth')) {
+    return null;
+  }
 
   return (
     <>

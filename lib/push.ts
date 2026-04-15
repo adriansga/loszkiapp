@@ -1,4 +1,4 @@
-import { supabase } from './db';
+import { getDb, supabaseAdmin } from './db';
 import * as webpush from 'web-push';
 
 export const OWNER_LABELS: Record<string, string> = { adrian: 'Adrian', kasia: 'Kasia', oboje: 'Oboje' };
@@ -23,10 +23,15 @@ type PushPayload = {
   icon?: string;
 };
 
-export async function sendPushToOwner(owner: string, payload: PushPayload) {
+// Użycie: w server actions (user zalogowany) → `sendPushToAll(...)` wysyła do householdu usera
+// W cron/webhook (brak usera) → `sendPushToAll(..., { admin: true })` wysyła do wszystkich
+export async function sendPushToAll(payload: PushPayload, opts: { admin?: boolean; householdId?: string } = {}) {
   try {
     ensureVapid();
-    const { data: subs } = await supabase.from('push_subscriptions').select('*').eq('owner', owner);
+    const supabase = opts.admin ? supabaseAdmin : await getDb();
+    let q = supabase.from('push_subscriptions').select('*');
+    if (opts.householdId) q = q.eq('household_id', opts.householdId);
+    const { data: subs } = await q;
     if (!subs?.length) return;
     const msg = JSON.stringify({ ...payload, icon: payload.icon || '/icon-192x192.png', badge: '/icon-96x96.png' });
     for (const sub of subs) {
@@ -39,10 +44,12 @@ export async function sendPushToOwner(owner: string, payload: PushPayload) {
   } catch { /* non-critical */ }
 }
 
-export async function sendPushToAll(payload: PushPayload) {
+// Wysyła do konkretnego właściciela (adrian/kasia) w ramach householdu zalogowanego usera
+export async function sendPushToOwner(owner: string, payload: PushPayload) {
   try {
     ensureVapid();
-    const { data: subs } = await supabase.from('push_subscriptions').select('*');
+    const supabase = await getDb();
+    const { data: subs } = await supabase.from('push_subscriptions').select('*').eq('owner', owner);
     if (!subs?.length) return;
     const msg = JSON.stringify({ ...payload, icon: payload.icon || '/icon-192x192.png', badge: '/icon-96x96.png' });
     for (const sub of subs) {

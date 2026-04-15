@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import Link from 'next/link';
 import { MealCard } from './MealCard';
 
@@ -28,6 +28,7 @@ export default async function ObiadyPage({
 }: {
   searchParams: Promise<{ week?: string; view?: string; day?: string }>;
 }) {
+  const supabase = await getDb();
   const params = await searchParams;
   const today = new Date();
   const currentWeek = getWeekNumber(today);

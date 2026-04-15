@@ -1,6 +1,6 @@
 'use server';
 
-import { supabase } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 
 export type Task = {
@@ -15,6 +15,7 @@ export type Task = {
 };
 
 export async function getTasks(): Promise<Task[]> {
+  const supabase = await getDb();
   const { data } = await supabase
     .from('tasks')
     .select('*')
@@ -25,6 +26,7 @@ export async function getTasks(): Promise<Task[]> {
 }
 
 export async function addTask(form: { title: string; assigned_to: string; due_date: string; notes: string }) {
+  const supabase = await getDb();
   const { data } = await supabase
     .from('tasks')
     .insert({
@@ -41,6 +43,7 @@ export async function addTask(form: { title: string; assigned_to: string; due_da
 }
 
 export async function toggleTask(id: string, currentStatus: 'todo' | 'done') {
+  const supabase = await getDb();
   const newStatus = currentStatus === 'todo' ? 'done' : 'todo';
   await supabase
     .from('tasks')
@@ -53,6 +56,7 @@ export async function toggleTask(id: string, currentStatus: 'todo' | 'done') {
 }
 
 export async function deleteTask(id: string) {
+  const supabase = await getDb();
   await supabase.from('tasks').delete().eq('id', id);
   revalidatePath('/zadania');
 }

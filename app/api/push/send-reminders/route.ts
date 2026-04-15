@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/db';
+import { supabaseAdmin as supabase } from '@/lib/db';
 import * as webpush from 'web-push';
 
 export async function GET(req: NextRequest) {

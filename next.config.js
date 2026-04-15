@@ -3,6 +3,7 @@ const withPWA = require('next-pwa')({
   disable: process.env.NODE_ENV === 'development',
   register: true,
   skipWaiting: true,
+  customWorkerDir: 'worker',
   runtimeCaching: [
     {
       // Strony HTML — zawsze najpierw sieć, cache tylko jako fallback offline

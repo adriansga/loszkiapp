@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import Link from 'next/link';
 import TasksWidget from './TasksWidget';
 import CalendarWidget from './CalendarWidget';
@@ -24,6 +24,7 @@ const dayLabels = ['', 'Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb', 'Nd'];
 const MAX_ITEMS = 5;
 
 export default async function DashboardPage() {
+  const supabase = await getDb();
   const today = new Date();
   const weekNum = getWeekNumber(today);
   const dayOfWeek = today.getDay() === 0 ? 7 : today.getDay();

@@ -20,7 +20,7 @@ try {
   }
 } catch {}
 
-const PROJECT_REF = 'qlqnrsxpmoeoukfgovmy'
+const PROJECT_REF = process.env.SUPABASE_PROJECT_REF || 'qlqnrsxpmoeoukfgovmy'
 const TOKEN = process.env.SUPABASE_ACCESS_TOKEN
 
 if (!TOKEN) {
@@ -58,7 +58,7 @@ const applied = await query('SELECT filename FROM _migrations')
 const appliedSet = new Set((applied || []).map(r => r.filename))
 
 const files = readdirSync('supabase/migrations')
-  .filter(f => f.endsWith('.sql'))
+  .filter(f => f.endsWith('.sql') && !f.startsWith('_manual'))
   .sort()
 
 if (!files.length) {

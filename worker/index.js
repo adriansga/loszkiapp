@@ -30,13 +30,22 @@ self.addEventListener('notificationclick', (event) => {
   const url = event.notification.data?.url || '/';
 
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async (windowClients) => {
+      // Jeśli okno apki jest już otwarte — przejdź do URL z powiadomienia (deep link)
       for (const client of windowClients) {
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
-          client.focus();
+        if (client.url.includes(self.location.origin)) {
+          if ('navigate' in client) {
+            try {
+              await client.navigate(url);
+            } catch {
+              // fallback — niektóre przeglądarki blokują navigate cross-origin
+            }
+          }
+          if ('focus' in client) return client.focus();
           return;
         }
       }
+      // Nic nie otwarte — otwórz nowe okno na właściwym URL
       if (clients.openWindow) {
         return clients.openWindow(url);
       }
