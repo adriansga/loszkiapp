@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServer } from '@/lib/supabase-server';
+import { supabaseAdmin } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
@@ -22,10 +23,39 @@ export async function GET(request: NextRequest) {
 
       if (!existing) {
         if (inviteToken) {
-          // Redirect do akceptacji invite
-          return NextResponse.redirect(`${origin}/api/invite/accept?token=${inviteToken}`);
+          // Obsługujemy invite TU — data.user jest pewny (właśnie zalogowany).
+          // NIE robimy redirect do /api/invite/accept, bo cookies sesji nie
+          // propagują się przez redirect i getCurrentUser() zwraca null → pętla.
+          const { data: invite } = await supabaseAdmin
+            .from('invite_tokens')
+            .select('household_id')
+            .eq('token', inviteToken)
+            .is('used_at', null)
+            .gt('expires_at', new Date().toISOString())
+            .maybeSingle();
+
+          if (invite) {
+            await supabaseAdmin.from('household_members').insert({
+              household_id: invite.household_id,
+              user_id: data.user.id,
+              role: 'member',
+            });
+            await supabaseAdmin
+              .from('invite_tokens')
+              .update({
+                used_at: new Date().toISOString(),
+                used_by: data.user.id,
+              })
+              .eq('token', inviteToken);
+
+            return NextResponse.redirect(`${origin}/?invite=accepted`);
+          }
+
+          // Token nieważny — powiedz użytkownikowi (sesja już jest, więc idą do /invite/invalid zalogowani)
+          return NextResponse.redirect(`${origin}/invite/invalid`);
         }
-        // Stwórz nowy household dla nowego użytkownika
+
+        // Brak invite — stwórz nowy household dla nowego użytkownika
         const { data: household } = await supabase
           .from('households')
           .insert({ name: `Dom ${data.user.email?.split('@')[0] ?? 'nowy'}`, created_by: data.user.id })
