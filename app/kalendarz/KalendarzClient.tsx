@@ -88,6 +88,8 @@ export default function KalendarzClient({
   const [saving, setSaving] = useState(false);
   const [pushOwner, setPushOwner] = useState<'adrian' | 'kasia' | null>(null);
   const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
   const [localEvents, setLocalEvents] = useState(events);
   const [selectedDate, setSelectedDate] = useState<string | null>(todayStr);
 
@@ -174,16 +176,22 @@ export default function KalendarzClient({
   }
 
   async function subscribePush(owner: 'adrian' | 'kasia') {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      alert('Twoja przeglądarka nie obsługuje powiadomień push.\nSpróbuj otworzyć aplikację w Chrome lub Safari na iOS 16.4+.');
-      return;
+    setPushError(null);
+    if (!('serviceWorker' in navigator)) {
+      setPushError('Service Worker niedostępny w tej przeglądarce.'); return;
     }
+    if (!('PushManager' in window)) {
+      setPushError('Push API niedostępne. Użyj Chrome lub Safari 16.4+ (PWA zainstalowana).'); return;
+    }
+    if (!('Notification' in window)) {
+      setPushError('Powiadomienia niedostępne w tej przeglądarce.'); return;
+    }
+    setPushLoading(true);
     try {
       const perm = await Notification.requestPermission();
-      if (perm === 'denied') { alert('Powiadomienia zablokowane w ustawieniach przeglądarki. Odblokuj je ręcznie.'); return; }
-      if (perm !== 'granted') return;
+      if (perm === 'denied') { setPushError('Powiadomienia zablokowane — odblokuj w ustawieniach przeglądarki.'); setPushLoading(false); return; }
+      if (perm !== 'granted') { setPushLoading(false); return; }
 
-      await navigator.serviceWorker.register('/sw.js');
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
@@ -194,12 +202,13 @@ export default function KalendarzClient({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ subscription: sub.toJSON(), owner }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error(`Serwer: ${res.status}`);
       setPushEnabled(true);
       setPushOwner(null);
-      alert(`✅ Powiadomienia włączone dla ${OWNER_LABELS[owner]}!`);
     } catch (err: any) {
-      alert('Błąd: ' + (err?.message ?? String(err)));
+      setPushError('Błąd: ' + (err?.message ?? String(err)));
+    } finally {
+      setPushLoading(false);
     }
   }
 
@@ -380,16 +389,31 @@ export default function KalendarzClient({
 
       {/* Modal push owner */}
       {pushOwner && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-xl">
-            <h3 className="font-bold text-zinc-900 mb-2">Kto otrzyma powiadomienia?</h3>
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-end md:items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-2xl">
+            <h3 className="font-bold text-zinc-900 mb-1 text-base">Kto otrzyma powiadomienia?</h3>
             <p className="text-sm text-zinc-500 mb-4">Wybierz profil dla tego urządzenia.</p>
-            <div className="flex gap-2">
+            {pushError && (
+              <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{pushError}</div>
+            )}
+            <div className="flex gap-3 mb-3">
               {(['adrian', 'kasia'] as const).map(o => (
-                <button key={o} onClick={() => subscribePush(o)} className={`flex-1 py-3 rounded-xl border-2 font-semibold text-sm ${OWNER_STYLES[o]}`}>{OWNER_LABELS[o]}</button>
+                <button
+                  key={o}
+                  type="button"
+                  disabled={pushLoading}
+                  onClick={() => subscribePush(o)}
+                  className={`flex-1 py-4 rounded-xl border-2 font-bold text-base transition-all active:scale-95 disabled:opacity-50 ${OWNER_STYLES[o]}`}>
+                  {pushLoading ? '⏳' : OWNER_LABELS[o]}
+                </button>
               ))}
             </div>
-            <button onClick={() => setPushOwner(null)} className="w-full mt-3 py-2 text-sm text-zinc-400 hover:text-zinc-600">Anuluj</button>
+            <button
+              type="button"
+              onClick={() => { setPushOwner(null); setPushError(null); }}
+              className="w-full py-2.5 text-sm text-zinc-400 hover:text-zinc-600 border border-zinc-200 rounded-xl">
+              Anuluj
+            </button>
           </div>
         </div>
       )}
