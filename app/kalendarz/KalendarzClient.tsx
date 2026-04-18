@@ -177,22 +177,34 @@ export default function KalendarzClient({
 
   async function subscribePush(owner: 'adrian' | 'kasia') {
     setPushError(null);
-    if (!('serviceWorker' in navigator)) {
-      setPushError('Service Worker niedostępny w tej przeglądarce.'); return;
-    }
-    if (!('PushManager' in window)) {
-      setPushError('Push API niedostępne. Użyj Chrome lub Safari 16.4+ (PWA zainstalowana).'); return;
-    }
-    if (!('Notification' in window)) {
-      setPushError('Powiadomienia niedostępne w tej przeglądarce.'); return;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      setPushError('Powiadomienia push niedostępne w tej przeglądarce lub trybie prywatnym.'); return;
     }
     setPushLoading(true);
     try {
+      // Poproś o zgodę — musi być bezpośrednio po kliknięciu (user gesture)
       const perm = await Notification.requestPermission();
-      if (perm === 'denied') { setPushError('Powiadomienia zablokowane — odblokuj w ustawieniach przeglądarki.'); setPushLoading(false); return; }
-      if (perm !== 'granted') { setPushLoading(false); return; }
+      if (perm === 'denied') { setPushError('Zablokowane — odblokuj powiadomienia w ustawieniach przeglądarki.'); return; }
+      if (perm !== 'granted') return;
 
-      const reg = await navigator.serviceWorker.ready;
+      // Zarejestruj SW i nie czekaj na .ready (może zawiesić) — użyj getRegistration
+      let reg = await navigator.serviceWorker.getRegistration('/');
+      if (!reg) {
+        reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+        // Poczekaj max 5s na aktywację
+        await Promise.race([
+          new Promise<void>(resolve => {
+            if (reg!.active) { resolve(); return; }
+            reg!.addEventListener('updatefound', () => {
+              reg!.installing?.addEventListener('statechange', function() {
+                if (this.state === 'activated') resolve();
+              });
+            });
+            setTimeout(resolve, 5000);
+          }),
+        ]);
+      }
+
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
@@ -202,9 +214,10 @@ export default function KalendarzClient({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ subscription: sub.toJSON(), owner }),
       });
-      if (!res.ok) throw new Error(`Serwer: ${res.status}`);
+      if (!res.ok) throw new Error(`Błąd serwera: ${res.status}`);
       setPushEnabled(true);
       setPushOwner(null);
+      setPushError(null);
     } catch (err: any) {
       setPushError('Błąd: ' + (err?.message ?? String(err)));
     } finally {
