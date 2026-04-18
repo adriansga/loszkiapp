@@ -31,15 +31,29 @@ export async function getCurrentUser() {
   return user;
 }
 
-export async function getCurrentHouseholdId() {
+// getCurrentHouseholdId — re-export z lib/db.ts (tam logika żeby uniknąć circular import)
+// WAŻNE: nie importuj tu z './db' statycznie (circular dependency!)
+// Funkcja getCurrentHouseholdId jest eksportowana z db.ts i można ją tam importować bezpośrednio.
+// Ten re-export zachowuje kompatybilność z istniejącymi plikami które importują z supabase-server.
+export async function getCurrentHouseholdId(): Promise<string | null> {
   const supabase = await getSupabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
-  const { data } = await supabase
-    .from('household_members')
-    .select('household_id')
-    .eq('user_id', user.id)
-    .limit(1)
-    .maybeSingle();
-  return data?.household_id ?? null;
+  // Używamy service role przez fetch bezpośrednio, żeby uniknąć RLS rekursji
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  if (!serviceKey || !supabaseUrl) return null;
+
+  const resp = await fetch(
+    `${supabaseUrl}/rest/v1/household_members?user_id=eq.${user.id}&select=household_id&limit=1`,
+    {
+      headers: {
+        'Authorization': `Bearer ${serviceKey}`,
+        'apikey': serviceKey,
+      }
+    }
+  );
+  if (!resp.ok) return null;
+  const data = await resp.json();
+  return Array.isArray(data) && data.length > 0 ? data[0].household_id : null;
 }

@@ -1,6 +1,6 @@
 'use server';
 
-import { getDb } from '@/lib/db';
+import { getDb, DEFAULT_HOUSEHOLD_ID } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { sendPushToAll } from '@/lib/push';
 
@@ -37,6 +37,7 @@ export async function addPantryItem(form: PantryForm) {
       category: form.category,
       purchase_date: form.purchase_date || null,
       expiry_days: form.expiry_days ? parseInt(form.expiry_days) : null,
+      household_id: DEFAULT_HOUSEHOLD_ID,
       ...(form.protein_per_100g != null && { protein_per_100g: form.protein_per_100g }),
       ...(form.fat_per_100g != null && { fat_per_100g: form.fat_per_100g }),
       ...(form.carbs_per_100g != null && { carbs_per_100g: form.carbs_per_100g }),
