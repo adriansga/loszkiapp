@@ -54,7 +54,7 @@ export default function AdminClient({ households, invites, users }: { households
 
       {tab === 'users' && (
         <>
-          <section className="bg-white rounded-xl shadow p-6 mb-6">
+          <section className="bg-white rounded-xl shadow p-6 mb-6 text-gray-900">
             <h2 className="text-lg font-bold mb-3">Zaproś nowego użytkownika</h2>
             <p className="text-xs text-gray-500 mb-3">Omija zwykły rate-limit Supabase (używa Admin API). User dostaje mail z linkiem.</p>
             <div className="flex flex-wrap gap-2">
@@ -81,7 +81,7 @@ export default function AdminClient({ households, invites, users }: { households
             </div>
           </section>
 
-          <section className="bg-white rounded-xl shadow overflow-hidden">
+          <section className="bg-white rounded-xl shadow overflow-hidden text-gray-900">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-left">
                 <tr>
@@ -136,7 +136,7 @@ export default function AdminClient({ households, invites, users }: { households
 
       {tab === 'households' && (
         <>
-          <section className="bg-white rounded-xl shadow p-6 mb-6">
+          <section className="bg-white rounded-xl shadow p-6 mb-6 text-gray-900">
             <h2 className="text-lg font-bold mb-3">Stwórz nowy dom</h2>
             <div className="flex gap-2">
               <input value={newHouseholdName} onChange={e => setNewHouseholdName(e.target.value)} placeholder="Nazwa"
@@ -155,7 +155,7 @@ export default function AdminClient({ households, invites, users }: { households
 
           <div className="space-y-4">
             {households.map(h => (
-              <div key={h.id} className="bg-white rounded-xl shadow p-5">
+              <div key={h.id} className="bg-white rounded-xl shadow p-5 text-gray-900">
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <h3 className="font-bold text-lg">{h.name}</h3>
@@ -202,7 +202,7 @@ export default function AdminClient({ households, invites, users }: { households
       )}
 
       {tab === 'invites' && (
-        <section className="bg-white rounded-xl shadow overflow-hidden">
+        <section className="bg-white rounded-xl shadow overflow-hidden text-gray-900">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-left"><tr>
               <th className="p-3">Dom</th>
@@ -240,16 +240,16 @@ export default function AdminClient({ households, invites, users }: { households
           {households.map(h => {
             const total = Object.values(h.stats).reduce((a, b) => a + b, 0);
             return (
-              <div key={h.id} className="bg-white rounded-xl shadow p-5">
+              <div key={h.id} className="bg-white rounded-xl shadow p-5 text-gray-900">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-bold">{h.name}</h3>
                   <span className="text-sm text-gray-500">Łącznie: <b>{total}</b> rekordów</span>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
                   {Object.entries(h.stats).map(([k, v]) => (
-                    <div key={k} className="bg-gray-50 rounded p-2">
+                    <div key={k} className="bg-gray-50 rounded p-2 text-gray-900">
                       <div className="text-xs text-gray-500">{k}</div>
-                      <div className="font-bold text-lg">{v}</div>
+                      <div className="font-bold text-lg text-gray-900">{v}</div>
                     </div>
                   ))}
                 </div>
