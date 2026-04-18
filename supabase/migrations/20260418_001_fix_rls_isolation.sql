@@ -138,3 +138,4 @@ from pg_tables
 where schemaname = 'public'
   and tablename not in ('_migrations')
 order by tablename;
+-- trigger workflow test Sat Apr 18 21:29:53     2026
