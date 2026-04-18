@@ -1,6 +1,8 @@
 import { getDb } from '@/lib/db';
 import KalendarzClient from './KalendarzClient';
 
+export const dynamic = 'force-dynamic';
+
 export default async function KalendarzPage() {
   const supabase = await getDb();
   const [{ data: events }, { data: reminders }] = await Promise.all([
