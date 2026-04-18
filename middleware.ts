@@ -7,6 +7,8 @@ const PUBLIC_PATHS = [
   '/auth/',
   '/api/push/notify',
   '/api/invite/accept',
+  '/invite/',         // strona zaproszenia — musi być publiczna (user jest niezalogowany)
+  '/invite/invalid',  // strona błędu zaproszenia
 ];
 
 function isPublic(pathname: string) {
