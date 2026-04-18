@@ -89,6 +89,7 @@ export default function KalendarzClient({
   const [pushOwner, setPushOwner] = useState<'adrian' | 'kasia' | null>(null);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [localEvents, setLocalEvents] = useState(events);
+  const [selectedDate, setSelectedDate] = useState<string | null>(todayStr);
 
   useEffect(() => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
@@ -220,7 +221,11 @@ export default function KalendarzClient({
           ))}
         </div>
         {!pushEnabled
-          ? <button onClick={() => setPushOwner('adrian')} className="text-xs px-3 py-1.5 rounded-lg bg-zinc-100 text-zinc-600 hover:bg-zinc-200 font-medium">🔔 Włącz powiadomienia</button>
+          ? <button
+              onClick={() => setPushOwner('adrian')}
+              className="text-xs px-3 py-2 rounded-lg bg-amber-500 text-white hover:bg-amber-600 font-semibold shadow-sm active:scale-95 transition-transform">
+              🔔 Włącz powiadomienia
+            </button>
           : (
             <div className="flex items-center gap-2">
               <span className="text-xs text-emerald-500 font-medium">🔔 Aktywne</span>
@@ -241,36 +246,76 @@ export default function KalendarzClient({
           const dateStr = day ? toDateStr(year, month, day) : null;
           const dayEvs = dateStr ? eventsForDate(dateStr) : [];
           const isToday = dateStr === todayStr;
+          const isSelected = dateStr === selectedDate;
           return (
-            <div key={i} onClick={() => day && openAdd(toDateStr(year, month, day))}
-              className={`bg-white min-h-[72px] p-1.5 flex flex-col cursor-pointer hover:bg-zinc-50 transition-colors ${!day ? 'opacity-0 pointer-events-none' : ''}`}>
+            <div key={i}
+              onClick={() => day && setSelectedDate(dateStr === selectedDate ? null : dateStr!)}
+              className={`min-h-[72px] p-1.5 flex flex-col cursor-pointer transition-colors ${!day ? 'opacity-0 pointer-events-none bg-white' : isSelected ? 'bg-emerald-50 ring-2 ring-inset ring-emerald-400' : 'bg-white hover:bg-zinc-50'}`}>
               {day && <>
-                <span className={`text-xs font-semibold mb-1 w-6 h-6 flex items-center justify-center rounded-full ${isToday ? 'bg-emerald-500 text-white' : 'text-zinc-700'}`}>{day}</span>
+                <span className={`text-xs font-semibold mb-1 w-6 h-6 flex items-center justify-center rounded-full ${isToday ? 'bg-emerald-500 text-white' : isSelected ? 'bg-emerald-400 text-white' : 'text-zinc-700'}`}>{day}</span>
                 <div className="flex flex-col gap-0.5 overflow-hidden">
-                  {dayEvs.map(ev => (
+                  {dayEvs.slice(0, 2).map(ev => (
                     <div key={ev.id}
-                      onClick={e => { e.stopPropagation(); openEdit(ev); }}
-                      className={`flex items-center gap-0.5 text-[10px] leading-tight px-1 py-0.5 rounded border cursor-pointer hover:opacity-80 ${OWNER_STYLES[ev.owner]} ${ev.is_done ? 'opacity-50' : ''}`}
-                      title={`${ev.title}${ev.time ? ' ' + ev.time : ''} — kliknij aby edytować`}>
-                      <span
-                        onClick={e => handleToggleDone(ev.id, !!ev.is_done, e)}
-                        className={`shrink-0 w-3 h-3 rounded-full border flex items-center justify-center transition-colors ${ev.is_done ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-current bg-white/50'}`}
-                        title={ev.is_done ? 'Oznacz jako nieodrobione' : 'Oznacz jako zrobione'}
-                      >
-                        {ev.is_done && <span className="text-[7px] leading-none">✓</span>}
-                      </span>
-                      <span className={`truncate ${ev.is_done ? 'line-through' : ''}`}>
-                        {ev.time && <span className="opacity-60">{ev.time} </span>}
-                        {ev.title}
-                      </span>
+                      className={`text-[10px] leading-tight px-1 py-0.5 rounded border truncate ${OWNER_STYLES[ev.owner]} ${ev.is_done ? 'opacity-50 line-through' : ''}`}>
+                      {ev.title}
                     </div>
                   ))}
+                  {dayEvs.length > 2 && (
+                    <div className="text-[10px] text-zinc-400 px-1">+{dayEvs.length - 2} więcej</div>
+                  )}
                 </div>
               </>}
             </div>
           );
         })}
       </div>
+
+      {/* Panel wybranego dnia */}
+      {selectedDate && (
+        <div className="mt-3 bg-white rounded-xl border-2 border-emerald-300 overflow-hidden shadow-sm">
+          <div className="flex items-center justify-between px-4 py-3 bg-emerald-50 border-b border-emerald-200">
+            <h3 className="font-bold text-emerald-800 text-sm">
+              {new Date(selectedDate + 'T12:00:00').toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </h3>
+            <div className="flex gap-2">
+              <button
+                onClick={() => openAdd(selectedDate)}
+                className="text-xs bg-emerald-500 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-emerald-600 active:scale-95 transition-transform">
+                + Dodaj
+              </button>
+              <button onClick={() => setSelectedDate(null)} className="text-xs text-zinc-400 hover:text-zinc-600 px-2">✕</button>
+            </div>
+          </div>
+          {eventsForDate(selectedDate).length === 0
+            ? <p className="text-sm text-zinc-400 text-center py-5 italic">Brak wydarzeń — kliknij „+ Dodaj"</p>
+            : <div className="divide-y divide-zinc-100">
+              {eventsForDate(selectedDate)
+                .sort((a, b) => (a.time ?? '99:99').localeCompare(b.time ?? '99:99'))
+                .map(ev => (
+                  <div key={ev.id} className={`flex items-start gap-3 px-4 py-3 hover:bg-zinc-50 transition-colors ${ev.is_done ? 'opacity-50' : ''}`}>
+                    <button
+                      onClick={e => handleToggleDone(ev.id, !!ev.is_done, e)}
+                      className={`mt-0.5 w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${ev.is_done ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-zinc-300 hover:border-emerald-400'}`}>
+                      {ev.is_done && <span className="text-[10px]">✓</span>}
+                    </button>
+                    <div className="flex-1 min-w-0 cursor-pointer" onClick={() => openEdit(ev)}>
+                      <p className={`text-sm font-medium ${ev.is_done ? 'line-through text-zinc-400' : 'text-zinc-900'}`}>{ev.title}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {ev.time && <span className="text-xs text-zinc-400">{ev.time}</span>}
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full border ${OWNER_STYLES[ev.owner]}`}>{OWNER_LABELS[ev.owner]}</span>
+                        {reminders.filter(r => r.event_id === ev.id).length > 0 && (
+                          <span className="text-xs text-amber-500">🔔 {reminders.filter(r => r.event_id === ev.id).map(r => formatOffsetLabel(r.offset_minutes)).join(', ')}</span>
+                        )}
+                      </div>
+                      {ev.notes && <p className="text-xs text-zinc-400 mt-0.5">{ev.notes}</p>}
+                    </div>
+                    <button onClick={() => openEdit(ev)} className="text-zinc-300 hover:text-zinc-500 text-sm shrink-0 mt-0.5">✏️</button>
+                  </div>
+                ))}
+            </div>
+          }
+        </div>
+      )}
 
       {/* Widok tygodnia */}
       <div className="mt-6">
