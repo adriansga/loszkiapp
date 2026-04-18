@@ -1,8 +1,14 @@
 #!/usr/bin/env node
 // Dump schema (DDL) from OLD Supabase project, write as SQL to stdout
+// Uzycie: OLD_SUPABASE_TOKEN=sbp_xxx OLD_SUPABASE_REF=qlqnrsxp... node scripts/dump-schema.mjs
 
-const OLD_TOKEN = 'REMOVED_OLD_TOKEN';
-const OLD_REF = 'qlqnrsxpmoeoukfgovmy';
+const OLD_TOKEN = process.env.OLD_SUPABASE_TOKEN;
+const OLD_REF = process.env.OLD_SUPABASE_REF || 'qlqnrsxpmoeoukfgovmy';
+
+if (!OLD_TOKEN) {
+  console.error('Brak OLD_SUPABASE_TOKEN. Ustaw zmienna srodowiskowa przed uruchomieniem.');
+  process.exit(1);
+}
 
 async function q(sql) {
   const r = await fetch(`https://api.supabase.com/v1/projects/${OLD_REF}/database/query`, {
@@ -20,14 +26,12 @@ const tables = (await q(`select table_name from information_schema.tables where 
 let out = '-- AUTO-GENERATED schema dump from old Supabase project\n-- Tables: ' + tables.join(', ') + '\n\n';
 
 for (const t of tables) {
-  // Columns
   const cols = await q(`
     select column_name, data_type, udt_name, is_nullable, column_default, character_maximum_length, is_identity, identity_generation
     from information_schema.columns
     where table_schema='public' and table_name='${t}'
     order by ordinal_position
   `);
-  // PK
   const pk = await q(`
     select kcu.column_name
     from information_schema.table_constraints tc
@@ -36,7 +40,6 @@ for (const t of tables) {
     where tc.table_schema='public' and tc.table_name='${t}' and tc.constraint_type='PRIMARY KEY'
     order by kcu.ordinal_position
   `);
-  // Check constraints
   const checks = await q(`
     select cc.check_clause, tc.constraint_name
     from information_schema.check_constraints cc
@@ -71,7 +74,6 @@ for (const t of tables) {
   out += `create table if not exists "${t}" (\n${colDefs.join(',\n')}\n);\n\n`;
 }
 
-// Indexes
 const idx = await q(`
   select indexname, indexdef from pg_indexes
   where schemaname='public' and indexname not like '%_pkey'
@@ -81,7 +83,5 @@ out += '\n-- Indexes\n';
 for (const i of idx) {
   out += i.indexdef.replace(/^CREATE INDEX/, 'create index if not exists').replace(/^CREATE UNIQUE INDEX/, 'create unique index if not exists') + ';\n';
 }
-
-// Sequences currval — skip, new DB starts fresh
 
 process.stdout.write(out);
