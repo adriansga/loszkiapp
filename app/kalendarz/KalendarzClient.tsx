@@ -175,15 +175,32 @@ export default function KalendarzClient({
 
   async function subscribePush(owner: 'adrian' | 'kasia') {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      alert('Twoja przeglądarka nie obsługuje push.'); return;
+      alert('Twoja przeglądarka nie obsługuje powiadomień push.\nSpróbuj otworzyć aplikację w Chrome lub Safari na iOS 16.4+.');
+      return;
     }
-    const perm = await Notification.requestPermission();
-    if (perm !== 'granted') return;
-    const reg = await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) });
-    await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub.toJSON(), owner }) });
-    setPushEnabled(true); setPushOwner(null);
-    alert(`Powiadomienia włączone dla ${OWNER_LABELS[owner]}!`);
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm === 'denied') { alert('Powiadomienia zablokowane w ustawieniach przeglądarki. Odblokuj je ręcznie.'); return; }
+      if (perm !== 'granted') return;
+
+      await navigator.serviceWorker.register('/sw.js');
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      });
+      const res = await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscription: sub.toJSON(), owner }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setPushEnabled(true);
+      setPushOwner(null);
+      alert(`✅ Powiadomienia włączone dla ${OWNER_LABELS[owner]}!`);
+    } catch (err: any) {
+      alert('Błąd: ' + (err?.message ?? String(err)));
+    }
   }
 
   const daysInMonth = getDaysInMonth(year, month);
