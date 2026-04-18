@@ -1,4 +1,5 @@
-import { getCurrentUser, getCurrentHouseholdId, getSupabaseServer } from '@/lib/supabase-server';
+import { getCurrentUser, getCurrentHouseholdId } from '@/lib/supabase-server';
+import { supabaseAdmin } from '@/lib/db';
 import UstawieniaClient from './UstawieniaClient';
 
 export default async function UstawieniaPage() {
@@ -9,15 +10,16 @@ export default async function UstawieniaPage() {
   let members: { email: string; role: string }[] = [];
 
   if (householdId) {
-    const supabase = await getSupabaseServer();
-    const { data: h } = await supabase.from('households').select('name').eq('id', householdId).maybeSingle();
+    const { data: h } = await supabaseAdmin.from('households').select('name').eq('id', householdId).maybeSingle();
     householdName = h?.name ?? '';
-    const { data: m } = await supabase
+    const { data: m } = await supabaseAdmin
       .from('household_members')
       .select('role, user_id')
       .eq('household_id', householdId);
-    // Email userów trzymamy w auth.users — dla MVP pokaż tylko role
-    members = (m ?? []).map(x => ({ email: x.user_id === user?.id ? (user?.email ?? '') : '(członek)', role: x.role }));
+
+    const { data: usersRes } = await supabaseAdmin.auth.admin.listUsers({ perPage: 200 });
+    const userMap = new Map((usersRes?.users ?? []).map(u => [u.id, u.email ?? '']));
+    members = (m ?? []).map(x => ({ email: userMap.get(x.user_id) ?? '(nieznany)', role: x.role }));
   }
 
   return (

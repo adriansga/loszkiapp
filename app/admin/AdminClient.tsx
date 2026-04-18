@@ -247,9 +247,9 @@ export default function AdminClient({ households, invites, users }: { households
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
                   {Object.entries(h.stats).map(([k, v]) => (
-                    <div key={k} className="bg-gray-50 rounded p-2 text-gray-900">
-                      <div className="text-xs text-gray-500">{k}</div>
-                      <div className="font-bold text-lg text-gray-900">{v}</div>
+                    <div key={k} className="bg-zinc-800 rounded p-3 text-white">
+                      <div className="text-xs text-zinc-400 mb-1">{k}</div>
+                      <div className="font-bold text-2xl text-white">{v}</div>
                     </div>
                   ))}
                 </div>
