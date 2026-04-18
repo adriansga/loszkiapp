@@ -175,19 +175,6 @@ export default function KalendarzClient({
     toggleEventDone(id, currentDone);
   }
 
-  async function waitForActiveSW(reg: ServiceWorkerRegistration): Promise<ServiceWorkerRegistration> {
-    if (reg.active) return reg;
-    return new Promise((resolve, reject) => {
-      const sw = reg.installing ?? reg.waiting;
-      if (!sw) { reject(new Error('Brak instalowanego SW')); return; }
-      const timer = setTimeout(() => reject(new Error('Timeout aktywacji SW — odśwież stronę i spróbuj ponownie')), 10000);
-      sw.addEventListener('statechange', function () {
-        if (this.state === 'activated') { clearTimeout(timer); resolve(reg); }
-        if (this.state === 'redundant') { clearTimeout(timer); reject(new Error('SW stał się redundant')); }
-      });
-    });
-  }
-
   async function subscribePush(owner: 'adrian' | 'kasia') {
     setPushError(null);
     if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
@@ -199,12 +186,18 @@ export default function KalendarzClient({
       if (perm === 'denied') { setPushError('Zablokowane — odblokuj powiadomienia w ustawieniach przeglądarki.'); return; }
       if (perm !== 'granted') return;
 
-      // Pobierz istniejącą rejestrację lub zarejestruj nową
-      let reg = await navigator.serviceWorker.getRegistration('/sw.js')
-             ?? await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+      // Upewnij się że SW jest zarejestrowany
+      if (!(await navigator.serviceWorker.getRegistration('/'))) {
+        await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+      }
 
-      // Czekaj aż SW będzie active (nie installing/waiting)
-      reg = await waitForActiveSW(reg);
+      // Czekaj na active SW — max 10s
+      const reg = await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout — odśwież stronę i spróbuj ponownie')), 10000)
+        ),
+      ]);
 
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
