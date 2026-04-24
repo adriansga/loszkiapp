@@ -3,6 +3,7 @@
 import Groq from 'groq-sdk';
 import pdfParse from 'pdf-parse';
 import { getDb } from '@/lib/db';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
 
 type Message = { role: 'user' | 'assistant'; content: string };
@@ -91,7 +92,7 @@ const TOOLS: Groq.Chat.ChatCompletionTool[] = [
 
 // ─── Wykonanie narzędzi ───────────────────────────────────────────────────────
 
-async function executeTool(name: string, args: Record<string, unknown>): Promise<string> {
+async function executeTool(supabase: SupabaseClient, name: string, args: Record<string, unknown>): Promise<string> {
   if (name === 'add_to_pantry') {
     const items = args.items as Array<{
       name: string; quantity: number; unit: string; category: string; expiry_days: number;
@@ -175,7 +176,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
 
 // ─── Kontekst ─────────────────────────────────────────────────────────────────
 
-async function getContext() {
+async function getContext(supabase: SupabaseClient) {
   const today = new Date();
   const weekNum = Math.ceil((((today.getTime() - new Date(today.getFullYear(), 0, 1).getTime()) / 86400000) + new Date(today.getFullYear(), 0, 1).getDay() + 1) / 7);
 
@@ -221,7 +222,7 @@ BAZA PRZEPISÓW (${mealsRes.data?.length || 0} dań):\n${recipesText}`;
 
 async function analyzeImage(client: Groq, imageBase64: string, imageMime: string): Promise<string> {
   const response = await client.chat.completions.create({
-    model: 'llama-3.2-11b-vision-preview',
+    model: 'meta-llama/llama-4-scout-17b-16e-instruct',
     max_tokens: 1024,
     messages: [{
       role: 'user',
@@ -251,7 +252,7 @@ export async function sendMessage(messages: Message[], imageBase64?: string, ima
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return 'Brak klucza GROQ_API_KEY.';
 
-  const context = await getContext();
+  const context = await getContext(supabase);
   const client = new Groq({ apiKey });
 
   const systemPrompt = `Jesteś Agentem Loszki — inteligentnym asystentem domowym Adriana i Kasi. Odpowiadasz po polsku, krótko i konkretnie.
@@ -329,7 +330,7 @@ ${context}`;
       for (const toolCall of choice.message.tool_calls) {
         const args = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
         console.log('[Agent] wywołuję narzędzie:', toolCall.function.name, JSON.stringify(args));
-        const result = await executeTool(toolCall.function.name, args);
+        const result = await executeTool(supabase, toolCall.function.name, args);
         console.log('[Agent] wynik narzędzia:', result);
         toolResults.push(result);
       }
