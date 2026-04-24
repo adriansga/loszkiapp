@@ -310,15 +310,31 @@ ${context}`;
   const isActionIntent = !!imageBase64 || /kalend|wydarzen|wpisz|dodaj do|zaplanuj|jutro|pojutrze|poniedzia|wtorek|środa|czwartek|piątek|sobota|niedziela|stycznia|lutego|marca|kwietnia|maja|czerwca|lipca|sierpnia|września|października|listopada|grudnia|o \d{1,2}[:h]|kupiłem|kupiłam|kupił|zakup|paragon|przeanalizuj|zjadłem|zjadłam|zjedliśmy|zużyłem|wyrzuciłem/.test(lastUserMsg);
 
   try {
-    // Pierwsza odpowiedź — wymuś narzędzie jeśli wykryto intencję akcji
-    const response = await client.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      messages: groqMessages,
-      tools: TOOLS,
-      tool_choice: isActionIntent ? 'required' : 'auto',
-      max_tokens: 1024,
-    });
-    console.log('[Agent] isActionIntent:', isActionIntent, '| tool_choice:', isActionIntent ? 'required' : 'auto');
+    // Pierwsza odpowiedź — zawsze auto, parallel_tool_calls: false zapobiega błędom JSON
+    let response: Groq.Chat.ChatCompletion;
+    try {
+      response = await client.chat.completions.create({
+        model: 'llama-3.3-70b-versatile',
+        messages: groqMessages,
+        tools: TOOLS,
+        tool_choice: 'auto',
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        parallel_tool_calls: false as any,
+        max_tokens: 1024,
+      });
+    } catch (toolErr: unknown) {
+      // Groq zwraca 400 gdy model wygeneruje błędny JSON dla narzędzia
+      // Fallback: ponów BEZ tools — model odpowie tekstowo
+      const errMsg = toolErr instanceof Error ? toolErr.message : String(toolErr);
+      console.warn('[Agent] Błąd tool_calling, ponawiam bez tools:', errMsg);
+      const fallback = await client.chat.completions.create({
+        model: 'llama-3.3-70b-versatile',
+        messages: groqMessages,
+        max_tokens: 1024,
+      });
+      return fallback.choices[0]?.message?.content ?? 'Coś poszło nie tak, spróbuj ponownie.';
+    }
+    console.log('[Agent] isActionIntent:', isActionIntent, '| tool_choice: auto (parallel: false)');
 
     const choice = response.choices[0];
     console.log('[Agent] finish_reason:', choice.finish_reason, '| tool_calls:', JSON.stringify(choice.message.tool_calls ?? null));
