@@ -267,10 +267,21 @@ MOŻESZ:
 ZASADA: gdy możesz coś zrobić (dodać, usunąć, zapisać) — ZRÓB TO przez narzędzie, nie tylko mów że możesz.
 
 GDY UŻYTKOWNIK WYSYŁA ZDJĘCIE PARAGONU:
-1. Przeanalizuj opis obrazu i zidentyfikuj sklep oraz produkty
-2. WYWOŁAJ add_to_pantry z produktami spożywczymi (mięso, nabiał, warzywa, owoce, pieczywo, suche produkty, napoje) — pomiń chemię i kosmetyki
-3. WYWOŁAJ add_budget_entry z łączną kwotą i opisem sklepu (np. "Zakupy Lidl", "Biedronka") — kategoria: "jedzenie"
-4. Potwierdź krótko co dodałeś do spiżarni i ile wydano
+1. Przeanalizuj [OBRAZ - opis] który pojawi się w wiadomości użytkownika
+2. KLUCZOWE: Używaj WYŁĄCZNIE produktów wymienionych w opisie obrazu — NIGDY nie wymyślaj produktów, które nie zostały wprost wymienione. Jeśli opis jest niepewny, napisz jakie produkty widzisz i zapytaj o potwierdzenie.
+3. WYWOŁAJ add_to_pantry z produktami spożywczymi (mięso, nabiał, warzywa, owoce, pieczywo, suche produkty, napoje) — pomiń chemię i kosmetyki
+4. WYWOŁAJ add_budget_entry z łączną kwotą i opisem sklepu (np. "Zakupy Lidl", "Biedronka") — kategoria: "jedzenie"
+5. Potwierdź dokładnie co dodałeś (każdy produkt z ilością) i ile wydano
+
+PO KAŻDYM WYWOŁANIU NARZĘDZIA:
+- Potwierdź dokładnie co zostało zapisane (nazwa produktu, ilość, kategoria) lub co się nie udało
+- Nie pisz "Dodałem" dopóki nie otrzymasz potwierdzenia z narzędzia
+- Jeśli narzędzie zwróci błąd — poinformuj użytkownika konkretnie co się nie udało
+
+ABSOLUTNY ZAKAZ HALUCYNACJI:
+- Nigdy nie wymieniaj produktów których nie ma w opisie obrazu/paragonu
+- Jeśli opis obrazu mówi "nie udało się przeanalizować" — zapytaj o opis ręczny zamiast zgadywać
+- Jeśli kwota lub produkt jest nieczytelny — napisz "nie widać wyraźnie, możesz potwierdzić?"
 
 AKTUALNY KONTEKST:
 ${context}`;
@@ -304,6 +315,16 @@ ${context}`;
     }),
   ];
 
+  // Filtruj raw function call syntax z content — nigdy nie pokazuj użytkownikowi surowych wywołań
+  function sanitizeContent(content: string | null | undefined): string {
+    if (!content) return '';
+    return content
+      .replace(/<function:[^>]+>[\s\S]*?<\/function[^>]*>/g, '')
+      .replace(/\[FUNCTION_CALL\][\s\S]*?\[\/FUNCTION_CALL\]/g, '')
+      .replace(/```function[\s\S]*?```/g, '')
+      .trim();
+  }
+
   // Wykryj intencję — jeśli użytkownik chce coś zapisać, wymuś użycie narzędzia
   const lastUserMsg = messages[messages.length - 1]?.content?.toLowerCase() ?? '';
   // isActionIntent = true gdy użytkownik chce coś zapisać LUB wysyła zdjęcie (imageBase64 obecny)
@@ -332,7 +353,7 @@ ${context}`;
         messages: groqMessages,
         max_tokens: 1024,
       });
-      return fallback.choices[0]?.message?.content ?? 'Coś poszło nie tak, spróbuj ponownie.';
+      return sanitizeContent(fallback.choices[0]?.message?.content) || 'Coś poszło nie tak, spróbuj ponownie.';
     }
     console.log('[Agent] isActionIntent:', isActionIntent, '| tool_choice: auto (parallel: false)');
 
@@ -351,30 +372,38 @@ ${context}`;
         toolResults.push(result);
       }
 
-      // Druga runda — model podsumowuje co zrobił
+      // Druga runda — model podsumowuje co zrobił (z instrukcją potwierdzenia)
+      const followUpMessages: Groq.Chat.ChatCompletionMessageParam[] = [
+        ...groqMessages,
+        { role: 'assistant', content: choice.message.content ?? '', tool_calls: choice.message.tool_calls },
+        ...choice.message.tool_calls.map((tc, i) => ({
+          role: 'tool' as const,
+          tool_call_id: tc.id,
+          content: toolResults[i],
+        })),
+        {
+          role: 'user' as const,
+          content: '[INSTRUKCJA SYSTEMOWA] Potwierdź użytkownikowi dokładnie co zostało zapisane lub co się nie udało — wylistuj każdy produkt/wpis z wynikiem operacji. Bądź konkretny: podaj nazwę, ilość, status. Nie pisz ogólnie "zapisałem" — cytuj wyniki narzędzia.',
+        },
+      ];
+
       const followUp = await client.chat.completions.create({
         model: 'llama-3.3-70b-versatile',
-        messages: [
-          ...groqMessages,
-          { role: 'assistant', content: choice.message.content ?? '', tool_calls: choice.message.tool_calls },
-          ...choice.message.tool_calls.map((tc, i) => ({
-            role: 'tool' as const,
-            tool_call_id: tc.id,
-            content: toolResults[i],
-          })),
-        ],
+        messages: followUpMessages,
         max_tokens: 512,
       });
 
-      return followUp.choices[0]?.message?.content ?? toolResults.join('\n');
+      const followUpContent = sanitizeContent(followUp.choices[0]?.message?.content);
+      return followUpContent || toolResults.join('\n');
     }
 
-    return choice.message.content ?? '';
+    // Sanityzuj odpowiedź tekstową — usuń raw function call syntax jeśli model ją wygenerował
+    return sanitizeContent(choice.message.content);
 
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes('429') || msg.includes('rate_limit')) {
-      return '⚠️ Przekroczono limit zapytań. Spróbuj za chwilę.';
+      return '⚠️ Przekroczono limit zapytań Groq (darmowy plan: ~30 zapytań/minutę). Poczekaj ok. 60 sekund i spróbuj ponownie.';
     }
     console.error('Agent error:', msg);
     return `❌ Błąd agenta: ${msg.slice(0, 200)}`;
