@@ -5,6 +5,7 @@ import pdfParse from 'pdf-parse';
 import { getDb } from '@/lib/db';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
+import { sendPushToAll, OWNER_LABELS } from '@/lib/push';
 
 type Message = { role: 'user' | 'assistant'; content: string };
 
@@ -168,6 +169,9 @@ async function executeTool(supabase: SupabaseClient, name: string, args: Record<
     });
     revalidatePath('/kalendarz');
     if (error) return `Błąd kalendarza: ${error.message}`;
+    const actor = OWNER_LABELS[args.owner as string] || 'Ktoś';
+    const dateLabel = new Date((args.date as string) + 'T12:00:00').toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' });
+    await sendPushToAll({ title: '📅 Nowe wydarzenie', body: `${actor}: ${args.title} — ${dateLabel}${args.time ? ', ' + args.time : ''}`, url: '/kalendarz', tag: 'calendar' });
     return `Dodano do kalendarza: ${args.title} (${args.date}${args.time ? ' ' + args.time : ''}, ${args.owner})`;
   }
 
